@@ -1,0 +1,32 @@
+
+siamese gflownet architecture:
+
+shared game context and team context embeddings
+split lagged positional embeddings for offense and defense, induce interaction via cross-attention
+embeddings as input features, play_yards_gained (or pass/rush specifically) as the reward target
+generate drives (sequences of plays) realistically
+
+
+also:
+
+hyperparameter tuning  **
+positionally encode timestep, player position, yards needed for first down  *
+create game context embeddings, player spatial embeddings, frame temporal embeddings  *
+initialize embedding transformer layer weights for spatial and temporal embeddings  ***
+initialize weights with contrastive pretraining based on game context and team context embeddings  ***
+inject latent noise to positional and velocity and acceleration embeddings  *
+generate sequences of plays  *
+regularize latent space with l1 and l2 and temporal smoothness and variance  *
+align generated embeddings using composite alignment loss  ***
+apply contrastive loss to generated embeddings to improve semantic representation quality  ***
+adjust objective function to guide generation according to philosophy or objectives quantified in input embeddings  *
+attend all 22 leave-one-out masked models to robustify for individual players  *
+early stopping  **
+
+
+installs:
+
+pip install torch==2.6.0+cu126 torchvision==0.21.0+cu126 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+pip uninstall torchaudio -y
+pip install watchdog typing-extensions toml tenacity narwhals pydeck altair
+pip install streamlit==1.49.1 --no-deps
