@@ -11,6 +11,7 @@ from common.constants import dtyp, seed, team_players
 from common.dirs import output_dir
 from data.constants import shape_players, x_field_max, y_mid, y_bnd
 from data.play_gfn import PlayStates
+from gflownet.estimators import Estimator
 
 
 def seed_worker(worker_id: int) -> None:
@@ -48,7 +49,7 @@ def sinusoidal_positional_encoding(
     return pe
 
 def collect_distributions(
-    tups: list[tuple[dtyp, nn.Module]], states: PlayStates
+    tups: list[tuple[dtyp, Estimator]], states: PlayStates
 ) -> list[torch.distributions.independent.Independent]:
     dists = [
         t[1].to_probability_distribution(states, None, True) for t in tups
@@ -75,7 +76,7 @@ def permute_batch_first(t: torch.Tensor) -> torch.Tensor:
 
     return t1.contiguous()
 
-def accumulate_xy(
+def accumulate_xy( # TODO zero out padded deltas?
     td: torch.Tensor, ts: torch.Tensor
 ) -> tuple[tuple]:
 

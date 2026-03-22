@@ -1,6 +1,7 @@
 
 import torch
 import torch.nn as nn
+import torch.utils.checkpoint as cp
 
 from ai.attender import Attender
 from ai.constants import (
@@ -959,7 +960,7 @@ class Encoder(nn.Module):
                 z00 = x_d[k0].reshape(T*B*N, -1)
                 z01 = self.player_initial_projs[k0][fs](z00)
                 if self.checkpoints:
-                    z02_d[fs] = torch.utils.checkpoint.checkpoint(
+                    z02_d[fs] = cp.checkpoint(
                         lambda x, f_s=fs, kk0=k0: self.block_1(x, f_s, kk0),
                         z01,
                         use_reentrant=reentrant
@@ -967,7 +968,7 @@ class Encoder(nn.Module):
                 else:
                     z02_d[fs] = self.block_1(z01, fs, k0)
             if self.checkpoints:
-                z03_d[k0] = torch.utils.checkpoint.checkpoint(
+                z03_d[k0] = cp.checkpoint(
                     lambda x, kk1=k0: self.block_2(x, kk1), z02_d,
                     use_reentrant=reentrant
                 )
@@ -975,7 +976,7 @@ class Encoder(nn.Module):
                 z03_d[k0] = self.block_2(z02_d, k0)
         for k1 in self.player_keys_d.keys():
             if self.checkpoints:
-                z04_d[k1] = torch.utils.checkpoint.checkpoint(
+                z04_d[k1] = cp.checkpoint(
                     lambda x, kk2=k1: self.block_3(x, kk2), z03_d,
                     use_reentrant=reentrant
                 )
@@ -983,7 +984,7 @@ class Encoder(nn.Module):
                 z04_d[k1] = self.block_3(z03_d, k1)
         for k2 in ["def", "off"]:
             if self.checkpoints:
-                z05_d[k2] = torch.utils.checkpoint.checkpoint(
+                z05_d[k2] = cp.checkpoint(
                     lambda x, kk3=k2: self.block_4(x, z_g, z_w1, kk3), z04_d,
                     use_reentrant=reentrant
                 )

@@ -8,10 +8,9 @@ from gflownet.states import States
 
 
 class Estimator(ABC, nn.Module):
-    def __init__(self, module: nn.Module, is_backward: bool=False) -> None:
+    def __init__(self, is_backward: bool) -> None:
         nn.Module.__init__(self)
 
-        self.module = module
         self.is_backward = is_backward
 
     @abstractmethod
@@ -23,7 +22,7 @@ class Estimator(ABC, nn.Module):
     def to_probability_distribution(
         self,
         states: States,
-        estimator_output: torch.Tensor | None,
+        estimator_outputs: torch.Tensor | None,
         **policy_kwargs: Any,
     ) -> torch.distributions.Distribution:
 

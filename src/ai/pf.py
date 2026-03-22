@@ -1,29 +1,30 @@
 
 import torch
-import torch.nn as nn
 from typing import Callable, TypeVar
 
 from ai.constants import model_name
+from ai.decoder import *
+from ai.diff_eq import *
+from ai.encoder import *
 from data.play_gfn import PlayStates
+from gflownet.estimators import Estimator
 
 
-class PF(nn.Module):
+class PF(Estimator):
     def __init__(
         self,
         player_count: int, trajectory_length: int,
         backwards: bool,
         dim_start: int, dim_hidden: int, dim_end: int,
         pow_iters: int,
-        encoder: Callable[[], nn.Module],
-        diff_eq: Callable[[], nn.Module],
-        decoder: Callable[[], nn.Module],
+        encoder_hps: dict, diff_eq_hps: dict, decoder_hps: dict,
         noise_floor: float, noise_ceiling: float, noise_gap: int,
         noise_exp: float,
         prior_means: tuple[tuple[float | list[float]]],
         prior_stdvs: tuple[tuple[float | list[float]]],
         device: torch.device
     ) -> None:
-        super().__init__()
+        super().__init__(is_backward=backwards)
 
         self.device = device
         self.to(self.device)
@@ -43,17 +44,20 @@ class PF(nn.Module):
 
         self.pow_iters = pow_iters
 
-        self.encoder = encoder(
+        self.encoder = Encoder(
             dim_output=self.dim_hidden,
+            **encoder_hps,
             pow_iters=self.pow_iters,
             backwards=self.backwards
         )
-        self.diff_eq = diff_eq(
+        self.diff_eq = DiffEq(
             dim_embedding=self.dim_hidden,
+            **diff_eq_hps,
             backwards=self.backwards
         )
-        self.decoder = decoder(
+        self.decoder = Decoder(
             dim_input=self.dim_hidden,
+            **decoder_hps,
             pow_iters=self.pow_iters,
             backwards=self.backwards
         )

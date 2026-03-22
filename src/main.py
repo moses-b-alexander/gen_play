@@ -7,7 +7,6 @@ os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 from copy import deepcopy
-from functools import partial
 import numpy as np
 import random
 import sys
@@ -17,9 +16,6 @@ from uuid import uuid4
 
 from ai.aggregate import *
 from ai.constants import *
-from ai.decoder import *
-from ai.diff_eq import *
-from ai.encoder import *
 from ai.hyperparameters import *
 from ai.pf import *
 from ai.train import *
@@ -51,8 +47,7 @@ torch.manual_seed(seed)
 
 tsts = seasons[-season_count::] if not from_start else seasons[:season_count:]
 
-unified_dfs, offense_dfs, defense_dfs, _ = [], [], [], []
-unified_dfs_f, offense_dfs_f, defense_dfs_f, _ = [], [], [], []
+unified_dfs, unified_dfs_f = [], []
 if not saved:
     for ts in tsts:
         unified_df = get_data(ts[0], ts[1], match_count)
@@ -117,15 +112,6 @@ print(f"~{df_mbs // 2} MB Used for Storage")
 # print(asdf)
 print("\n\n")
 
-prototype_hps = dict(
-    dim_global=global_dim, dim_agent=agent_dim, dim_output=action_dim,
-    dim_prj_play=32, dim_lin_play=64, dropout_play=0.01,
-    dim_prj_player=32, dim_lin_player=64, dropout_player=0.01,
-    dim_prj_fused=32, dim_lin_fused=64, dropout_fused=0.05,
-    beta_sp=1e1, epsilon_sp=1e-8,
-    device=learning_device,
-)
-
 input_hps = dict(
     player_count=(shape_players//2),
     trajectory_length=(num_timesteps*1),
@@ -140,7 +126,7 @@ encoder_hps = get_encoder_hyperparameters(
     num_heads=4, dropout=0.10,
     expansion=2,
 ) | input_hps
-diffeq_hps = dict(
+diff_eq_hps = dict(
     drift_size=2, diffusion_size=2,
     dim_middle=32,
     steps=2,
@@ -163,34 +149,18 @@ pf_hps = dict(
     backwards=False,
     dim_start=state_dim, dim_hidden=shared_hps["dim_h"], dim_end=action_dim,
     pow_iters=shared_hps["pow_iters"],
-    encoder=partial(Encoder, **encoder_hps),
-    diff_eq=partial(DiffEq, **diffeq_hps),
-    decoder=partial(Decoder, **decoder_hps),
+    encoder_hps=encoder_hps, diff_eq_hps=diff_eq_hps, decoder_hps=decoder_hps,
     **output_hps,
 )
 pb_hps = dict(
     **input_hps,
+    backwards=True,
     dim_start=state_dim, dim_hidden=shared_hps["dim_h"], dim_end=action_dim,
     pow_iters=shared_hps["pow_iters"],
-    encoder=partial(Encoder, **encoder_hps),
-    diff_eq=partial(DiffEq, **diffeq_hps),
-    decoder=partial(Decoder, **decoder_hps),
-    backwards=True,
+    encoder_hps=encoder_hps, diff_eq_hps=diff_eq_hps, decoder_hps=decoder_hps,
     **output_hps,
 )
 
-pf_flat_hps = {
-    **input_hps,
-    "dim_start": state_dim,
-    "dim_hidden": shared_hps["dim_h"],
-    "dim_end": action_dim,
-    "pow_iters": shared_hps["pow_iters"],
-    **encoder_hps,
-    **diffeq_hps,
-    **decoder_hps,
-    "backwards": False,
-    **output_hps,
-}
 config_hps = {
     "dtype": str(dtyp),
     "seasons": season_count, "matches": match_count,
@@ -205,26 +175,29 @@ config_hps = {
     "input_dim": state_dim, "hidden_dim": final_dim, "output_dim": action_dim,
     "dx_threshold": max_dx, "dy_threshold": max_dy,
     "screen": screen_mode, "color": "#999999",
+    "name": model_name,
 }
 
 retsu0 = train_bagged_model(
     bag_ct=1, ratio=0.999,
+    # bag_ct=5, ratio=0.800,
     df_m=df_u_f_train,
     pf_cls=PF, pf_args=pf_hps,
-    # pb_cls=PF, pb_args=pb_hps,
-    pb_cls=None, pb_args={},
+    pb_cls=PF, pb_args=pb_hps,
+    # pb_cls=None, pb_args={},
     random=False,
     write_model=True,
-    hp_dict=pf_flat_hps,
     cfg_dict=config_hps,
     runner_device=learning_device
 )
 
 run_id = ""
-retsu0 = [
-    (r[0], ((PF(**pf_hps)).load_state_dict(r[-1])).eval())
-    for r in (load_models(run_id, learning_device))
-]
+retsu0 = []
+for r in load_models(run_id, learning_device):
+    mr = PF(**pf_hps)
+    _ = mr.load_state_dict(r[-1])
+    mr.eval()
+    retsu0.append((r[0], mr))
 
 num_eval_traj = batch_size * 1
 eval_states, eval_ids, eval_df = produce_evaluation_states(

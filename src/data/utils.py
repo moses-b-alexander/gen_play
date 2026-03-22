@@ -16,13 +16,15 @@ from gflownet.trajectories import Trajectories
 def subset_containers(
     env: PlayEnv, idxs: int | list[int] | None=None
 ) -> list[PlayContainer]:
-    if idxs is None:  idx_l = list(range(len(env.containers)))
+    if idxs is None:
+        idx_l = list(range(len(env.containers)))
     elif isinstance(idxs, int):
         if idxs >= 0 and idxs < len(env.containers):
             idx_l = [idxs]
     elif isinstance(idxs, list):
         idx_l = [i for i in idxs if i >= 0 and i < len(env.containers)]
-    else:  idx_l = list(range(len(env.containers)))
+    else:
+        idx_l = list(range(len(env.containers)))
 
     ctrs = [env.containers[ci] for ci in idx_l]
 

@@ -22,22 +22,19 @@ from data.play_gfn import PlayEnv, PlayPreprocessor
 from data.processing import split_df
 from data.utils import build_trajectories_from_batch, subset_containers
 from gflownet.base import GFlowNet, TBGFlowNet
+from gflownet.estimators import Estimator
 
 
 def initialize_model(
     env: PlayEnv,
-    fwd_model: nn.Module, bwd_model: nn.Module,
+    fwd_model: Estimator, bwd_model: Estimator,
     model_device: torch.device
-) -> tuple[GFlowNet, nn.Module, nn.Module, torch.optim.Optimizer]:
+) -> tuple[GFlowNet, Estimator, Estimator, torch.optim.Optimizer]:
 
     p_f_model = fwd_model.to(model_device)
     p_b_model = bwd_model.to(model_device) if bwd_model is not None else None
 
-    gf_net = TBGFlowNet(
-        pf=p_f_model,
-        pb=p_b_model,
-        logZ=env.log_z
-    )
+    gf_net = TBGFlowNet(pf=p_f_model, pb=p_b_model, logZ=env.log_z)
 
     pf_params = list(p_f_model.parameters())
     pb_params = list(p_b_model.parameters()) if p_b_model is not None else []
@@ -74,7 +71,7 @@ def training_step(
 def train_model(
     return_aux: bool,
     env: PlayEnv,
-    p_f: nn.Module, p_b: nn.Module | None,
+    p_f: Estimator, p_b: Estimator | None,
     optm: torch.optim.Optimizer | None,
     idxs: int | list[int] | None,
     write_loss: int,
@@ -119,28 +116,27 @@ def train_model(
 
         if write_loss > 0 and cur % write_loss == 0:
             print(s_str, f"Step {cur:04d} Loss: {lossv:.3f}", s_str)
-            print(asdf)
+            # print(asdf)
 
-    if return_aux:  return (env.log_z, pf, pb, opt)
-    else:  return (env.log_z, pf)
+    if return_aux:  return (env.log_z, gfn.pf, gfn.pb, opt)
+    else:  return (env.log_z, gfn.pf)
 
 def train_bagged_model(
     bag_ct: int,
     df_m: pd.DataFrame,
-    pf_cls: Type[nn.Module], pb_cls: Type[nn.Module],
+    pf_cls: Type[Estimator], pb_cls: Type[Estimator],
     pf_args: dict, pb_args: dict,
     ratio: float=1.000,
     random: bool=False,
     write_model: bool=False,
-    hp_dict: dict={},
     cfg_dict: dict={},
     runner_device: torch.device=learning_device
-) -> list[tuple[dtyp, nn.Module]]:
+) -> list[tuple[dtyp, Estimator]]:
     rets = []
     uid = uuid4().hex
 
     if ratio == 0.999:  ratio = 1.000 # for convenience
-    if ratio == 0.000:  ratio = 0.001 # well ok
+    if ratio == 0.001:  ratio = 0.000 # well ok
 
     for i in range(bag_ct):
         ids_train, _ = split_df(df_w=df_m, ratio=ratio)
@@ -171,7 +167,7 @@ def train_bagged_model(
             torch.save(
                 {
                     "log_z": dtyp(mt[0]),
-                    "hyperparameters": hp_dict.copy(),
+                    "hyperparameters": deepcopy(pf_args),
                     "config": cfg_dict.copy(),
                     "pf": mt[1].state_dict(),
                 },
