@@ -174,8 +174,10 @@ def train_bagged_model(
                 os.path.join(wd, f"model_{i+1}.pt")
             )
             print(
-                (s_str * 2), f"Total Yards in Dataset for {uid}_{i+1}: ",
-                np.round(np.exp(mt[0]) * x_field_max, 3), (s_str * 2)
+                (s_str[:-1] * 2), "\n",
+                f"Total Yards in Dataset for {uid}_{i+1}: ",
+                np.round((np.exp(mt[0]) * x_field_max), 3),
+                (s_str[:-1] * 2), "\n"
             )
 
     return rets
