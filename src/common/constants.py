@@ -4,7 +4,8 @@ import numpy as np
 
 eps_tmp = 1e-12
 
-s_str = "\n" + ("="*68) + "\n"
+s_char = "="
+s_str = "\n" + (s_char * 68) + "\n"
 
 screen_mode = "dark"
 

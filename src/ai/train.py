@@ -13,7 +13,7 @@ from ai.constants import (
     action_dim, batch_size, state_dim, learning_rate, weight_decay_rate
 )
 from ai.utils import seed_worker
-from common.constants import dtyp, s_str, seed
+from common.constants import dtyp, s_char, s_str, seed
 from common.devices import learning_device
 from common.dirs import output_dir
 from data.constants import x_field_max
@@ -174,10 +174,10 @@ def train_bagged_model(
                 os.path.join(wd, f"model_{i+1}.pt")
             )
             print(
-                (s_str[:-1] * 2), "\n",
+                (s_str[:-1] * 2).replace(s_char, "*"), "\n",
                 f"Total Yards in Dataset for {uid}_{i+1}: ",
                 np.round((np.exp(mt[0]) * x_field_max), 3),
-                (s_str[:-1] * 2), "\n"
+                (s_str[:-1] * 2).replace(s_char, "*"), "\n"
             )
 
     return rets
