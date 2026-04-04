@@ -11,8 +11,8 @@ train_ratio = 0.90
 
 learning_rate, weight_decay_rate = 1e-4, 1e-5
 
-max_window = 1000
-downsampling = 10
+max_window = 180
+downsampling = 1
 
 batch_size = 8
 
