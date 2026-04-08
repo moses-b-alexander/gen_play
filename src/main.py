@@ -180,6 +180,7 @@ config_hps = {
 
 retsu0 = train_bagged_model(
     bag_ct=1, ratio=0.999,
+    # bag_ct=3, ratio=0.900,
     # bag_ct=5, ratio=0.800,
     df_m=df_u_f_train,
     pf_cls=PF, pf_args=pf_hps,
@@ -205,7 +206,7 @@ eval_states, eval_ids, eval_df = produce_evaluation_states(
 )
 eval_states_r = PlayStates(permute_batch_first(eval_states.tensor))
 
-print("===================================================================\n")
+print(s_str)
 avgs = aggregate_samples(retsu0, eval_states)
 
 orig = [tensorize_xy(eval_df, eval_id) for eval_id in eval_ids]
