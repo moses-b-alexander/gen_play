@@ -88,7 +88,7 @@ df_u_f = df_u_f.copy()
 
 num_timesteps = max(df_u_f.index.get_level_values(1).tolist())
 
-train_ids, test_ids = split_df(df_w=df_u_f, ratio=train_ratio)
+train_ids, test_ids = split_df(df_w=df_u_f, ratio=train_ratio, random=False)
 df_u_f_train = df_u_f.loc[df_u_f.index.get_level_values(0).isin(train_ids),]
 df_u_f_test = df_u_f.loc[df_u_f.index.get_level_values(0).isin(test_ids),]
 
@@ -179,14 +179,19 @@ config_hps = {
 }
 
 retsu0 = train_bagged_model(
-    bag_ct=1, ratio=0.999,
-    # bag_ct=3, ratio=0.900,
-    # bag_ct=5, ratio=0.800,
+    # bag_ct=1, ratio=0.999,
+    # bag_ct=2, ratio=0.500,
+    bag_ct=4, ratio=0.750,
+    # bag_ct=8, ratio=0.875,
+    # bag_ct=16, ratio=0.750,
+    # bag_ct=32, ratio=0.500,
+    # bag_ct=64, ratio=0.375,
+    # bag_ct=127, ratio=0.125,
     df_m=df_u_f_train,
     pf_cls=PF, pf_args=pf_hps,
     pb_cls=PF, pb_args=pb_hps,
     # pb_cls=None, pb_args={},
-    random=False,
+    random=True,
     write_model=True,
     cfg_dict=config_hps,
     runner_device=learning_device

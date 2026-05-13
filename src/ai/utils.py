@@ -76,7 +76,7 @@ def permute_batch_first(t: torch.Tensor) -> torch.Tensor:
 
     return t1.contiguous()
 
-def accumulate_xy( # TODO zero out padded deltas?
+def accumulate_xy(
     td: torch.Tensor, ts: torch.Tensor
 ) -> tuple[tuple]:
 

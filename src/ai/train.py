@@ -116,7 +116,6 @@ def train_model(
 
         if write_loss > 0 and cur % write_loss == 0:
             print(s_str, f"Step {cur:04d} Loss: {lossv:.3f}", s_str)
-            # print(asdf)
 
     if return_aux:  return (env.log_z, gfn.pf, gfn.pb, opt)
     else:  return (env.log_z, gfn.pf)
@@ -136,10 +135,10 @@ def train_bagged_model(
     uid = uuid4().hex
 
     if ratio == 0.999:  ratio = 1.000 # for convenience
-    if ratio == 0.001:  ratio = 0.000 # well ok
+    if ratio == 0.000:  ratio = 0.001 # just in case
 
     for i in range(bag_ct):
-        ids_train, _ = split_df(df_w=df_m, ratio=ratio)
+        ids_train, _ = split_df(df_w=df_m, ratio=ratio, random=random)
         df_mm = df_m.loc[df_m.index.get_level_values(0).isin(ids_train),]
         env_train = PlayEnv(
             dfs=[df_mm], preprocessor=PlayPreprocessor(output_dim=state_dim))

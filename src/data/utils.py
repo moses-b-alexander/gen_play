@@ -35,7 +35,7 @@ def produce_evaluation_states(
     df_e: pd.DataFrame,
     random: bool=False
 ) -> PlayStates:
-    eval_ids, _ = split_df(df_w=df_e, ratio=1.0)
+    eval_ids, _ = split_df(df_w=df_e, ratio=1.0, random=random)
     num_plays_eval = len(eval_ids)
 
     if isinstance(num, int):  num_n = num

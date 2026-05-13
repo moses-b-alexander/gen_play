@@ -1110,8 +1110,9 @@ def split_df(
         traj_ids = [t for t in traj_ids_w]
         traj_ids_n = []
     else:
-        traj_ids = rng.choice(
-            traj_ids_w, size=int(len(traj_ids_w) * rtio), replace=False)
+        traj_ids = list(rng.choice(
+            traj_ids_w, size=int(len(traj_ids_w) * rtio), replace=False
+        ))
         traj_ids_n = [t for t in traj_ids_w if t not in traj_ids]
 
     return (traj_ids, traj_ids_n)
