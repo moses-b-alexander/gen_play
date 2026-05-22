@@ -86,6 +86,7 @@ class Dynamics(torchsde.SDEIto):
         noise_scale = self.scale + torch.sigmoid(diffusion_sch).item()
 
         if noise_scale >= 1.00:  noise_scale = 1.00
+        if noise_scale <= -1.00:  noise_scale = -1.00
         diffusion_scaled = noise_scale * diffusion
 
         return diffusion_scaled

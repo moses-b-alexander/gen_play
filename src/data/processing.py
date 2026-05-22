@@ -17,9 +17,8 @@ from data.columns import (
     track_col_types, track_rename_cols
 )
 from data.constants import (
-    col_fillnas, col_types, fstv, game_time, lstv,
-    num_drives, num_games, play_catgs,
-    reward_log_scale, train_index, test_index,
+    col_fillnas, col_types, fstv, game_time, lstv, num_drives, num_games,
+    play_catgs, reward_scale, train_index, test_index,
     x_field_min, x_field_max, y_bnd, y_hash
 )
 from data.names import (
@@ -859,7 +858,6 @@ def pad_plays(
         padded_df = padded_df.copy()
 
         padded_df["play_real"] = col_types["float"](True)
-        # play_padded
         padded_df["play_is_first"] = (
             [col_types["float"](1.0)] +
             ([col_types["float"](0.0)] * (padded_df.shape[0] - 1))
@@ -943,7 +941,7 @@ def set_reward(df: pd.DataFrame, sn: bool=False) -> pd.DataFrame:
 
     if not sn:  sgn = -1
     else:  sgn = +1
-    rwd = lambda yg: (1 / (1 + (np.exp(sgn * reward_log_scale * yg))))
+    rwd = lambda yg: (1 / (1 + (np.exp(sgn * reward_scale * yg))))
     df["play_yards_gained"] = df["play_yards_gained"].apply(rwd)
     df["play_yards_gained"] = df["play_yards_gained"].astype(dtyp)
 

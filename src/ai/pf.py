@@ -62,10 +62,14 @@ class PF(Estimator):
             backwards=self.backwards
         )
 
-        self.noise_floor = noise_floor
-        self.noise_ceiling = noise_ceiling
-        self.noise_gap = noise_gap
-        self.noise_exp = noise_exp
+        self.noise_gap = noise_gap if noise_gap > 1 and noise_gap < 1e9 else 2
+        self.noise_floor = noise_floor if noise_floor > 0.00 else 1e-9
+        self.noise_ceiling = noise_ceiling if noise_ceiling < 1.00 else 1e0
+        if self.noise_floor >= self.noise_ceiling:
+            self.noise_floor = 1e-9
+            self.noise_ceiling = 1e0
+        self.noise_exp = \
+            noise_exp if noise_exp >= 0.5 and noise_exp <= 2.0 else 1.0
 
         prior_means_dx = torch.cat([
             torch.tensor(([prior_means[0][0]] * player_count)) \
@@ -131,7 +135,9 @@ class PF(Estimator):
         hT = self.diff_eq(h0)
 
         if training:
-            n_scale = (hT.detach()).std(dim=-1, keepdim=True).clamp_min(1e-6)
+            n_scale = (
+                (hT.detach()).std(dim=-1, keepdim=True)
+            ).clamp(min=self.noise_floor, max=self.noise_ceiling)
             n_step = self.noise_floor + (
                 self.noise_ceiling / ((s + self.noise_gap) ** self.noise_exp)
             )

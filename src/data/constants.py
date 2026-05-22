@@ -19,10 +19,6 @@ num_drives = game_time // 4
 
 max_play_frames = (fps * 60) / 4.00
 
-reward_scale = 1.00
-if reward_scale < 1e-1 or reward_scale > 1e1:  reward_scale = 1.00
-reward_log_scale = log(reward_scale)
-
 reward_sign = False
 
 reward_threshold = 1.00
@@ -30,6 +26,8 @@ reward_threshold = abs(reward_threshold)
 if reward_threshold > x_field_max or reward_threshold < 1 / x_field_max:
     reward_threshold = 1.00
 if reward_threshold > 1.00:  reward_threshold /= x_field_max
+
+reward_scale = 1.00
 
 fstv, lstv = dtyp(-1.0), dtyp(+1.0)
 

@@ -105,7 +105,7 @@ def train_model(
 
     for step, batch in enumerate(loader):
         cur = step + 1
-        if cur > int(1e9):  break
+        if cur > ((2 ** 31) - 2):  break
 
         gfn, opt, lossv = training_step(
             env=env, batch=batch,
@@ -174,9 +174,9 @@ def train_bagged_model(
             )
             print(
                 (s_str[:-1] * 2).replace(s_char, "*"), "\n",
-                f"Total Yards in Dataset for {uid}_{i+1}: ",
+                f"Total Yards in Dataset for {uid}_{i+1}:: ",
                 np.round((np.exp(mt[0]) * x_field_max), 3),
-                (s_str[:-1] * 2).replace(s_char, "*"), "\n"
+                (s_str[:-1] * 2).replace(s_char, "*"), "\n",
             )
 
     return rets

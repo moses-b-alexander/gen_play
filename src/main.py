@@ -45,6 +45,9 @@ random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 
+pd.set_option("display.max_rows", 1000)
+pd.set_option("display.max_columns", 100)
+
 tsts = seasons[-season_count::] if not from_start else seasons[:season_count:]
 
 unified_dfs, unified_dfs_f = [], []
@@ -82,7 +85,8 @@ df_u_f = pd.concat(unified_dfs_f, axis=0, ignore_index=False)
 df_u_f = df_u_f.copy()
 
 df_u_f = postprocess_df(
-    df_u_f, sn=reward_sign, ci=[0, ], mw=max_window, dr=downsampling
+    df_u_f,
+    sn=reward_sign, ci=[0, ], mw=max_window, dr=downsampling
 )
 df_u_f = df_u_f.copy()
 
@@ -164,7 +168,7 @@ pb_hps = dict(
 config_hps = {
     "dtype": str(dtyp),
     "seasons": season_count, "matches": match_count,
-    "reward_threshold": reward_threshold, "reward_scale": reward_log_scale,
+    "reward_threshold": reward_threshold, "reward_scale": reward_scale,
     "reward_sign": reward_sign,
     "split": train_ratio,
     "lr": learning_rate, "wd": weight_decay_rate,
@@ -179,14 +183,17 @@ config_hps = {
 }
 
 retsu0 = train_bagged_model(
-    # bag_ct=1, ratio=0.999,
-    # bag_ct=2, ratio=0.500,
-    bag_ct=4, ratio=0.750,
-    # bag_ct=8, ratio=0.875,
-    # bag_ct=16, ratio=0.750,
+    bag_ct=1, ratio=0.999,
+    # bag_ct=2, ratio=0.900,
+    # bag_ct=4, ratio=0.800,
+    # bag_ct=8, ratio=0.700,
+    # bag_ct=16, ratio=0.600,
     # bag_ct=32, ratio=0.500,
-    # bag_ct=64, ratio=0.375,
-    # bag_ct=127, ratio=0.125,
+    # bag_ct=64, ratio=0.400,
+    # bag_ct=128, ratio=0.300,
+    # bag_ct=256, ratio=0.200,
+    # bag_ct=512, ratio=0.100,
+    # bag_ct=1024, ratio=0.001,
     df_m=df_u_f_train,
     pf_cls=PF, pf_args=pf_hps,
     pb_cls=PF, pb_args=pb_hps,
@@ -196,6 +203,8 @@ retsu0 = train_bagged_model(
     cfg_dict=config_hps,
     runner_device=learning_device
 )
+
+print(s_str)
 
 run_id = ""
 retsu0 = []
@@ -211,7 +220,6 @@ eval_states, eval_ids, eval_df = produce_evaluation_states(
 )
 eval_states_r = PlayStates(permute_batch_first(eval_states.tensor))
 
-print(s_str)
 avgs = aggregate_samples(retsu0, eval_states)
 
 orig = [tensorize_xy(eval_df, eval_id) for eval_id in eval_ids]

@@ -27,7 +27,6 @@ class Attender(nn.Module):
         else:  unif_bnd = 0.05
 
         self.linear_kernel = torch.cos
-        # self.linear_kernel = torch.elu
 
         self.t_q = nn.Parameter(torch.ones(self.num_heads))
         self.t_k = nn.Parameter(torch.ones(self.num_heads))
@@ -88,13 +87,13 @@ class Attender(nn.Module):
 
         tt_q = (
             tau_qk * torch.tanh(self.t_q).clamp_(min=-1.0, max=+1.0)
-        ) + 1.0
+        ) + 1.5
         tt_k = (
             tau_qk * torch.tanh(self.t_k).clamp_(min=-1.0, max=+1.0)
-        ) + 1.0
+        ) + 1.5
 
-        tt_q += 1e-3
-        tt_k += 1e-3
+        tt_q *= 0.8
+        tt_k *= 0.8
 
         q_f = self.linear_kernel(q_b / tt_q.view(-1, 1, 1).unsqueeze(0)) + 1.0
         k_f = self.linear_kernel(k_b / tt_k.view(-1, 1, 1).unsqueeze(0)) + 1.0

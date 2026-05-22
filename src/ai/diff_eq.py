@@ -41,7 +41,7 @@ class DiffEq(nn.Module):
 
         x_flat = x.reshape(-1, x_shape[-1])
 
-        times = torch.linspace(0.0, 1.0, self.steps, device=x.device)
+        times = torch.linspace(0.00, 1.00, self.steps, device=x.device)
 
         # diff_eq = torchsde.sdeint(
         diff_eq = torchsde.sdeint_adjoint(

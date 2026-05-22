@@ -15,7 +15,7 @@ from gflownet.estimators import Estimator
 
 
 def seed_worker(worker_id: int) -> None:
-    worker_seed = (seed + worker_id) % (2 ** 32)
+    worker_seed = (seed + worker_id) % ((2 ** 31) - 1)
 
     random.seed(worker_seed)
     np.random.seed(worker_seed)
@@ -76,7 +76,7 @@ def permute_batch_first(t: torch.Tensor) -> torch.Tensor:
 
     return t1.contiguous()
 
-def accumulate_xy(
+def accumulate_xy( # TODO null padded T
     td: torch.Tensor, ts: torch.Tensor
 ) -> tuple[tuple]:
 
