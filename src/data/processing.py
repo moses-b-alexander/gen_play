@@ -216,12 +216,12 @@ def get_data(
     play = play.fillna(play_col_fillnas).astype(play_col_types)
     play = play.copy()
 
-    season_tracking_files = [
+    season_tracking_files = list(sorted([
         f for f in os.listdir(tracking_path)
         if tm in f[20:] and
         (int(f[12:16]) == (szn) and (int(f[16:18]) >= 7) or
         (int(f[12:16]) == (szn + 1) and (int(f[16:18]) < 7)))
-    ][:mct]
+    ]))[:mct]
 
     track_dfs = []
     for tracking_index in range(len(season_tracking_files)):

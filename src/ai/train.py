@@ -179,4 +179,4 @@ def train_bagged_model(
                 (s_str[:-1] * 2).replace(s_char, "*"), "\n",
             )
 
-    return rets
+    return (rets, uid)

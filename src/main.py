@@ -133,7 +133,7 @@ encoder_hps = get_encoder_hyperparameters(
 diff_eq_hps = dict(
     drift_size=2, diffusion_size=2,
     dim_middle=32,
-    steps=2,
+    steps=4,
     rtol=1e-5, atol=1e-5,
     scale=1e-1,
     dt=1e-2,
@@ -182,17 +182,12 @@ config_hps = {
     "name": model_name,
 }
 
-retsu0 = train_bagged_model(
-    bag_ct=1, ratio=0.999,
-    # bag_ct=2, ratio=0.900,
-    # bag_ct=4, ratio=0.800,
-    # bag_ct=8, ratio=0.700,
-    # bag_ct=16, ratio=0.600,
-    # bag_ct=32, ratio=0.500,
-    # bag_ct=64, ratio=0.400,
-    # bag_ct=128, ratio=0.300,
-    # bag_ct=256, ratio=0.200,
-    # bag_ct=512, ratio=0.100,
+print(s_str)
+run_id = ""
+
+retsu0, run_id = train_bagged_model(
+    # bag_ct=1, ratio=0.999,
+    bag_ct=4, ratio=0.900,
     # bag_ct=1024, ratio=0.001,
     df_m=df_u_f_train,
     pf_cls=PF, pf_args=pf_hps,
@@ -204,17 +199,16 @@ retsu0 = train_bagged_model(
     runner_device=learning_device
 )
 
-print(s_str)
+if not run_id:  run_id = "8148e4f93e81408992ae0aee12a84adf"
 
-run_id = ""
 retsu0 = []
 for r in load_models(run_id, learning_device):
-    mr = PF(**pf_hps)
-    _ = mr.load_state_dict(r[-1])
+    mr = PF(**r[1])
+    _ = mr.load_state_dict(r[3])
     mr.eval()
     retsu0.append((r[0], mr))
 
-num_eval_traj = batch_size * 1
+num_eval_traj = batch_size * 4
 eval_states, eval_ids, eval_df = produce_evaluation_states(
     num=num_eval_traj, df_e=df_u_f_test, random=False
 )
@@ -230,7 +224,7 @@ gend = [
 ]
 
 ips = list(range(num_eval_traj))
-for ip in ips[::3]:
+for ip in ips[::24]:
     a00, s00 = plot_play_2(None, orig[ip], gend[ip], num_timesteps, 1)
     plt.show()
     plt.close("all")
