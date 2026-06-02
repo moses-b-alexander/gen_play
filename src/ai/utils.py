@@ -92,8 +92,8 @@ def accumulate_xy( # TODO null padded T
         dim=0
     )
 
-    t[..., 0] = (ts[1, :, 21] + tdd_x + ts[1, :, -4])
-    t[..., 1] = (ts[1, :, 22] + tdd_y + ts[1, :, -3])
+    t[..., 0] = (ts[1, :, 21] + tdd_x + ts[1, :, -6])
+    t[..., 1] = (ts[1, :, 22] + tdd_y + ts[1, :, -5])
 
     t[..., 0] *= x_field_max
     t[..., 1] *= np.abs(y_bnd)

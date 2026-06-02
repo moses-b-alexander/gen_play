@@ -185,21 +185,21 @@ config_hps = {
 print(s_str)
 run_id = ""
 
-retsu0, run_id = train_bagged_model(
-    # bag_ct=1, ratio=0.999,
-    bag_ct=4, ratio=0.900,
-    # bag_ct=1024, ratio=0.001,
-    df_m=df_u_f_train,
-    pf_cls=PF, pf_args=pf_hps,
-    pb_cls=PF, pb_args=pb_hps,
-    # pb_cls=None, pb_args={},
-    random=True,
-    write_model=True,
-    cfg_dict=config_hps,
-    runner_device=learning_device
-)
+# retsu0, run_id = train_bagged_model(
+#     # bag_ct=1, ratio=0.999,
+#     bag_ct=4, ratio=0.900,
+#     # bag_ct=1024, ratio=0.001,
+#     df_m=df_u_f_train,
+#     pf_cls=PF, pf_args=pf_hps,
+#     pb_cls=PF, pb_args=pb_hps,
+#     # pb_cls=None, pb_args={},
+#     random=True,
+#     write_model=True,
+#     cfg_dict=config_hps,
+#     runner_device=learning_device
+# )
 
-if not run_id:  run_id = "9d7c670520bd4d49a34f8c2b866dc61b "
+if not run_id:  run_id = "9d7c670520bd4d49a34f8c2b866dc61b"
 
 retsu0 = []
 for r in load_models(run_id, learning_device):
@@ -208,7 +208,7 @@ for r in load_models(run_id, learning_device):
     mr.eval()
     retsu0.append((r[0], mr))
 
-num_eval_traj = batch_size * 4
+num_eval_traj = batch_size * 1
 eval_states, eval_ids, eval_df = produce_evaluation_states(
     num=num_eval_traj, df_e=df_u_f_test, random=False
 )
@@ -224,8 +224,9 @@ gend = [
 ]
 
 ips = list(range(num_eval_traj))
-for ip in ips[::24]:
-    a00, s00 = plot_play_2(None, orig[ip], gend[ip], num_timesteps, 1)
+for ip in ips[::4]:
+    a00, s00 = plot_play_2_new(None, orig[ip], gend[ip], num_timesteps, 1, show_def_to_off=True, show_off_to_def=False)
+    # a00, s00 = plot_play_2_new(None, orig[ip], gend[ip], num_timesteps, 1, show_def_to_off=False, show_off_to_def=True)
     plt.show()
     plt.close("all")
 
