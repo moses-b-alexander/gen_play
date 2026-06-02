@@ -397,13 +397,34 @@ def get_data(
     track["player_ax"] = track.player_ax.div((fps ** 2))
     track["player_ay"] = track.player_ay.div((fps ** 2))
 
-    track["abs_player_y"] = track["player_y"].abs()
-    track["abs_player_y"] = \
-        track["abs_player_y"].astype(col_types["float"])
+    track["player_yabs"] = track["player_y"].abs().astype(col_types["float"])
+
+    _loc = track[[
+        "play_uuid", "frame_time", "player_uuid",
+        "player_offense", "player_x", "player_y",
+    ]]
+    _opp = _loc.rename(columns={
+        "player_uuid": "_opp_uuid", "player_offense": "_opp_off",
+        "player_x": "_opp_x", "player_y": "_opp_y",
+    })
+    _cross = _loc.merge(_opp, on=["play_uuid", "frame_time"])
+    _cross = _cross[_cross.player_offense != _cross._opp_off]
+    _cross["_d"] = np.sqrt(
+        (_cross.player_x - _cross._opp_x) ** 2 +
+        (_cross.player_y - _cross._opp_y) ** 2
+    ).astype(np.float32)
+    _sep = _cross.groupby(
+        ["play_uuid", "frame_time", "player_uuid"], sort=False
+    )["_d"].min().rename("player_sep")
+    track = track.merge(
+        _sep.reset_index(), on=["play_uuid", "frame_time", "player_uuid"],
+        how="left",
+    )
+    track["player_sep"] = track["player_sep"].astype(col_types["float"])
+
     track = track.sort_values(by=(
-        frame_colnames[:-1] + ["player_offense", "player_x", "abs_player_y"]
+        frame_colnames[:-1] + ["player_offense", "player_x", "player_yabs"]
     ))
-    track = track.drop(columns=["abs_player_y"])
 
     track["player_rank"] = \
         track.groupby(frame_colnames[:-1], sort=False).cumcount() + 1
@@ -460,6 +481,12 @@ def get_data(
         ]].astype("boolean").fillna(False).astype(int).sum(axis=1)
     track_new["defense_ct"] = track_new["defense_ct"].astype(int)
     track_new["offense_ct"] = track_new["offense_ct"].astype(int)
+
+    invalid_plays_4 = track_new.loc[
+        (track_new.defense_ct == 0) | (track_new.offense_ct == 0),
+    "play_uuid"].unique()
+    track_new = track_new.loc[~track_new.play_uuid.isin(invalid_plays_4),]
+
     track_new["all_ct"] = track_new.defense_ct + track_new.offense_ct
     track_new["no_ct"] = track_new.all_ct.rsub(all_players)
 
@@ -525,34 +552,6 @@ def get_data(
     ])
     track_new = track_new.astype(track_col_types)
     track_new = track_new.copy()
-
-    _xs = track_new[
-        [f"player_x-{n:02d}" for n in range(1, all_players + 1)]
-    ].values.astype(np.float32)
-    _ys = track_new[
-        [f"player_y-{n:02d}" for n in range(1, all_players + 1)]
-    ].values.astype(np.float32)
-    _off = track_new[
-        [f"player_offense-{n:02d}" for n in range(1, all_players + 1)]
-    ].values.astype(np.float32)
-    _opp_mask = (
-        (_off[:, :, np.newaxis] != _off[:, np.newaxis, :]) &
-        (~(np.isnan(_xs) | np.isnan(_ys)))[:, np.newaxis, :]
-    )
-    _dist_all = np.sqrt(
-        (_xs[:, :, np.newaxis] - _xs[:, np.newaxis, :]) ** 2 +
-        (_ys[:, :, np.newaxis] - _ys[:, np.newaxis, :]) ** 2
-    )
-    _sep_all = np.where(_opp_mask, _dist_all, np.inf).min(axis=2)
-    _sep_all = np.where(
-        np.isinf(_sep_all), np.nan, _sep_all
-    ).astype(np.float32)
-    for _n in range(all_players):
-        track_new[f"player_sep-{_n + 1:02d}"] = _sep_all[:, _n]
-    for _n in range(1, all_players + 1):
-        track_new[f"player_yabs-{_n:02d}"] = np.abs(
-            _ys[:, _n - 1]
-        ).astype(np.float32)
 
     df = play.merge(
         track_new, on=["play_uuid"], how="inner", suffixes=("", "_track"))
@@ -626,10 +625,14 @@ def get_data(
         for n in range(1, all_players + 1)
     ])
     _is_off_qb = (_qb_vals == 1) & (_off_vals == 1)
-    with np.errstate(all="ignore"):
-        df["play_qb_pressure"] = np.nanmax(
-            np.where(_is_off_qb, _sep_vals, np.nan), axis=1
-        ).astype(col_types["float"])
+    _qb_sep = np.where(_is_off_qb, _sep_vals, np.nan)
+    _qb_sep_f = np.where(np.isnan(_qb_sep), -np.inf, _qb_sep)
+    _no_qb = np.all(~np.isfinite(_qb_sep_f), axis=1)
+    _rows = np.arange(len(df))
+    _qb_idx = np.argmax(_qb_sep_f, axis=1)
+    df["play_qb_pressure"] = np.where(
+        _no_qb, np.nan, _qb_sep[_rows, _qb_idx]
+    ).astype(col_types["float"])
     _wr_vals = np.column_stack([
         df[f"player_position_wr-{n:02d}"].values.astype(np.float32)
         for n in range(1, all_players + 1)
@@ -650,11 +653,17 @@ def get_data(
     _rec_sep_f = np.where(np.isnan(_rec_sep), -np.inf, _rec_sep)
     _no_rec = np.all(~np.isfinite(_rec_sep_f), axis=1)
     _tgt_idx = np.argmax(_rec_sep_f, axis=1)
-    _rows = np.arange(len(df))
     _tgt_sep = np.where(_no_rec, np.nan, _rec_sep[_rows, _tgt_idx])
     _tgt_depth = np.where(_no_rec, np.nan, _rec_x[_rows, _tgt_idx])
     df["play_tgt_sep"] = _tgt_sep.astype(col_types["float"])
     df["play_tgt_depth"] = _tgt_depth.astype(col_types["float"])
+
+    df["play_qb_pressure"] = \
+        df["play_qb_pressure"].fillna(col_types["float"](0.0))
+    df["play_tgt_sep"] = \
+        df["play_tgt_sep"].fillna(col_types["float"](0.0))
+    df["play_tgt_depth"] = \
+        df["play_tgt_depth"].fillna(col_types["float"](0.0))
 
     df["play_time_since_start"] = \
         df["frame_time"].astype(col_types["float"])
@@ -1011,12 +1020,13 @@ def pad_plays(
 
     return p_df
 
-def set_reward(df: pd.DataFrame, sn: bool=False) -> pd.DataFrame:
+def set_reward(df: pd.DataFrame, sn: bool=False, rs: float | None = None) -> pd.DataFrame:
     df = df.copy()
 
+    scale = rs if rs is not None else reward_scale
     if not sn:  sgn = -1
     else:  sgn = +1
-    rwd = lambda yg: (1 / (1 + (np.exp(sgn * reward_scale * yg))))
+    rwd = lambda yg: (scale * (1 / (1 + (np.exp(sgn * yg)))))
     df["play_yards_gained"] = df["play_yards_gained"].apply(rwd)
     df["play_yards_gained"] = df["play_yards_gained"].astype(dtyp)
 
@@ -1144,21 +1154,96 @@ def set_window(df: pd.DataFrame, window_len: int, downsample_rate: int=1):
 
     return df
 
+_TWO_MIN = 2 / 15  # 120_000 ms / 900_000 ms per quarter
+
+
+def slice_df(
+    df: pd.DataFrame,
+    max_score_diff: float | None = 0.14,
+    max_down: float | None = 0.50,
+    snap_x_range: tuple[float, float] | None = (0.20, 0.80),
+    cut_2min: bool = True,
+) -> pd.DataFrame:
+    """
+    Filter trajectories by play-level conditions. Operates
+    at trajectory granularity — either the whole play is
+    kept or dropped.
+
+    Parameters (all in the df's normalised units):
+      max_score_diff : |off - def| / 100
+                       0.14 = within 14 points
+      max_down       : play_down / 4
+                       0.50 = 1st or 2nd down only
+      snap_x_range   : (lo, hi) for play_snap_x in [0,1]
+                       (0.20, 0.80) = non-red-zone,
+                       non-own-endzone
+      cut_2min       : if True, drop plays in Q2 and Q4
+                       with play_time <= 2/15 (~2 min left).
+
+    Reads play context from frame index 2 (first real frame
+    after the start sentinel) where play-level features hold
+    their true values.
+    """
+    frame2 = df.loc[df.index.get_level_values(1) == 2]
+
+    mask = pd.Series(True, index=frame2.index)
+
+    if max_score_diff is not None:
+        mask &= (
+            frame2["play_score_difference"].abs()
+            <= max_score_diff
+        )
+    if max_down is not None:
+        mask &= frame2["play_down"] <= max_down
+    if snap_x_range is not None:
+        lo, hi = snap_x_range
+        mask &= (
+            (frame2["play_snap_x"] >= lo) &
+            (frame2["play_snap_x"] <= hi)
+        )
+    if cut_2min:
+        late_q = frame2["play_quarter"].isin([0.50, 1.00])
+        two_min_drill = (
+            late_q & (frame2["play_time"] <= _TWO_MIN)
+        )
+        mask &= ~two_min_drill
+
+    valid_ids = frame2.loc[mask].index.get_level_values(0)
+    return df.loc[
+        df.index.get_level_values(0).isin(valid_ids)
+    ].copy()
+
+
 def postprocess_df(
     df: pd.DataFrame,
-    sn: bool=False,
-    ci: list[int]=list(range(len(play_catgs))),
-    mw: int=0, dr: int=1
+    sn: bool = False,
+    ci: list[int] = list(range(len(play_catgs))),
+    mw: int = 0, dr: int = 1,
+    max_score_diff: float | None = None,
+    max_down: float | None = None,
+    snap_x_range: tuple[float, float] | None = None,
+    cut_2min: bool = False,
+    rs: float | None = None,
+    skip_reward: bool = False,
 ) -> pd.DataFrame:
     df = df.copy()
 
-    df = set_reward(df, sn=sn)
+    if not skip_reward:
+        df = set_reward(df, sn=sn, rs=rs)
 
     df = set_zero_play(df)
 
     df = set_zero_player(df)
 
     df = set_category(df, catg_idxs=ci)
+
+    df = slice_df(
+        df,
+        max_score_diff=max_score_diff,
+        max_down=max_down,
+        snap_x_range=snap_x_range,
+        cut_2min=cut_2min,
+    )
 
     df = set_window(df, window_len=mw, downsample_rate=dr)
 

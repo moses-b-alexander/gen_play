@@ -122,8 +122,9 @@ def load_models(
 ) -> list[tuple[dtyp, dict]]:
     l = []
     if uid == "":  return []
-    if os.path.exists(os.path.join(output_dir, uid)):
-        wd = os.path.join(output_dir, uid)
+    udir = os.path.join(output_dir, uid)
+    if os.path.exists(udir) and os.path.isdir(udir):
+        wd = udir
     else:
         return []
     sl = [f for f in os.listdir(wd)]

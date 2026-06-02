@@ -199,7 +199,7 @@ retsu0, run_id = train_bagged_model(
     runner_device=learning_device
 )
 
-if not run_id:  run_id = "8148e4f93e81408992ae0aee12a84adf"
+if not run_id:  run_id = "9d7c670520bd4d49a34f8c2b866dc61b "
 
 retsu0 = []
 for r in load_models(run_id, learning_device):

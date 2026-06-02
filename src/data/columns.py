@@ -81,6 +81,8 @@ track_cols = {
     "player_vy": "float",
     "player_x": "float",
     "player_y": "float",
+    "player_sep": "float",
+    "player_yabs": "float",
 }
 
 date_cols = {
@@ -113,6 +115,8 @@ player_cols = {
     "player_vy": "float",
     "player_x": "float",
     "player_y": "float",
+    "player_sep": "float",
+    "player_yabs": "float",
 }
 
 pivot_cols = {
