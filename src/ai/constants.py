@@ -26,7 +26,7 @@ max_deltas = [
 ]
 max_dx, max_dy = max_deltas[0], max_deltas[1]
 
-global_dim, agent_dim = 28, 21
+global_dim, agent_dim = 31, 23
 state_dim = global_dim + agent_dim
 
 action_dim = 2
@@ -43,18 +43,20 @@ play_tensor_indices = {
     "snap": [18, 19, 20, 21],
     "when": [24, 25],
     "snap_y": [22],
-    "length": [27],
+    "pressure": [27],
+    "tgt": [28, 29],
+    "length": [30],
 }
 
 player_tensor_indices = {
-    "role": [30, 31, 32, 33, 35, 36, 37, 38, 39, 40],
-    "acceleration": [28, 29],
-    "position": [45, 46],
-    "velocity": [43, 44],
-    "x": [28, 43, 45],
-    "y": [29, 44, 46],
-    "team": [47, 48],
-    "snap": [41, 42],
+    "role": [33, 34, 35, 36, 38, 39, 40, 41, 42, 43],
+    "acceleration": [31, 32],
+    "position": [48, 49],
+    "velocity": [46, 47],
+    "x": [31, 46, 48, 50],
+    "y": [32, 47, 49, 51],
+    "team": [52, 53],
+    "snap": [44, 45],
 }
 player_tensor_indices = {
     k: list(map(lambda i: i - global_dim, v))

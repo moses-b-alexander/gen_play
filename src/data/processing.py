@@ -526,6 +526,34 @@ def get_data(
     track_new = track_new.astype(track_col_types)
     track_new = track_new.copy()
 
+    _xs = track_new[
+        [f"player_x-{n:02d}" for n in range(1, all_players + 1)]
+    ].values.astype(np.float32)
+    _ys = track_new[
+        [f"player_y-{n:02d}" for n in range(1, all_players + 1)]
+    ].values.astype(np.float32)
+    _off = track_new[
+        [f"player_offense-{n:02d}" for n in range(1, all_players + 1)]
+    ].values.astype(np.float32)
+    _opp_mask = (
+        (_off[:, :, np.newaxis] != _off[:, np.newaxis, :]) &
+        (~(np.isnan(_xs) | np.isnan(_ys)))[:, np.newaxis, :]
+    )
+    _dist_all = np.sqrt(
+        (_xs[:, :, np.newaxis] - _xs[:, np.newaxis, :]) ** 2 +
+        (_ys[:, :, np.newaxis] - _ys[:, np.newaxis, :]) ** 2
+    )
+    _sep_all = np.where(_opp_mask, _dist_all, np.inf).min(axis=2)
+    _sep_all = np.where(
+        np.isinf(_sep_all), np.nan, _sep_all
+    ).astype(np.float32)
+    for _n in range(all_players):
+        track_new[f"player_sep-{_n + 1:02d}"] = _sep_all[:, _n]
+    for _n in range(1, all_players + 1):
+        track_new[f"player_yabs-{_n:02d}"] = np.abs(
+            _ys[:, _n - 1]
+        ).astype(np.float32)
+
     df = play.merge(
         track_new, on=["play_uuid"], how="inner", suffixes=("", "_track"))
     df = df.copy()
@@ -580,6 +608,53 @@ def get_data(
         "play_score_equal"] = True
     df.loc[df.play_score_difference.abs() > 1e-2,
         "play_score_equal"] = False
+
+    _off_vals = np.column_stack([
+        df[f"player_offense-{n:02d}"].values.astype(np.float32)
+        for n in range(1, all_players + 1)
+    ])
+    _sep_vals = np.column_stack([
+        df[f"player_sep-{n:02d}"].values.astype(np.float32)
+        for n in range(1, all_players + 1)
+    ])
+    _x_vals = np.column_stack([
+        df[f"player_x-{n:02d}"].values.astype(np.float32)
+        for n in range(1, all_players + 1)
+    ])
+    _qb_vals = np.column_stack([
+        df[f"player_position_qb-{n:02d}"].values.astype(np.float32)
+        for n in range(1, all_players + 1)
+    ])
+    _is_off_qb = (_qb_vals == 1) & (_off_vals == 1)
+    with np.errstate(all="ignore"):
+        df["play_qb_pressure"] = np.nanmax(
+            np.where(_is_off_qb, _sep_vals, np.nan), axis=1
+        ).astype(col_types["float"])
+    _wr_vals = np.column_stack([
+        df[f"player_position_wr-{n:02d}"].values.astype(np.float32)
+        for n in range(1, all_players + 1)
+    ])
+    _te_vals = np.column_stack([
+        df[f"player_position_te-{n:02d}"].values.astype(np.float32)
+        for n in range(1, all_players + 1)
+    ])
+    _rb_vals = np.column_stack([
+        df[f"player_position_rb-{n:02d}"].values.astype(np.float32)
+        for n in range(1, all_players + 1)
+    ])
+    _is_rec = (
+        (_wr_vals == 1) | (_te_vals == 1) | (_rb_vals == 1)
+    ) & (_off_vals == 1) & (_x_vals > 0)
+    _rec_sep = np.where(_is_rec, _sep_vals, np.nan)
+    _rec_x = np.where(_is_rec, _x_vals, np.nan)
+    _rec_sep_f = np.where(np.isnan(_rec_sep), -np.inf, _rec_sep)
+    _no_rec = np.all(~np.isfinite(_rec_sep_f), axis=1)
+    _tgt_idx = np.argmax(_rec_sep_f, axis=1)
+    _rows = np.arange(len(df))
+    _tgt_sep = np.where(_no_rec, np.nan, _rec_sep[_rows, _tgt_idx])
+    _tgt_depth = np.where(_no_rec, np.nan, _rec_x[_rows, _tgt_idx])
+    df["play_tgt_sep"] = _tgt_sep.astype(col_types["float"])
+    df["play_tgt_depth"] = _tgt_depth.astype(col_types["float"])
 
     df["play_time_since_start"] = \
         df["frame_time"].astype(col_types["float"])

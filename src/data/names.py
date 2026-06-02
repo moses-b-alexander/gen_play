@@ -28,6 +28,7 @@ play_state_colnames = [
     "play_snap_x", "play_snap_y",
     "play_time", "play_time_after_snap", "play_time_before_snap",
     "play_yards_needed",
+    "play_qb_pressure", "play_tgt_sep", "play_tgt_depth",
     "play_true_length",
 ]
 player_state_colnames = [[
@@ -41,6 +42,7 @@ player_state_colnames = [[
     f"player_pre_snap-{n:02d}", f"player_post_snap-{n:02d}",
     f"player_vx-{n:02d}", f"player_vy-{n:02d}",
     f"player_x-{n:02d}", f"player_y-{n:02d}",
+    f"player_sep-{n:02d}", f"player_yabs-{n:02d}",
     f"player_defense-{n:02d}", f"player_offense-{n:02d}",
 ] for n in range(1, all_players + 1)]
 player_state_flattened_colnames = \
@@ -181,6 +183,7 @@ player_float_flattened_colnames = [[
     f"player_dx-{n:02d}", f"player_dy-{n:02d}",
     f"player_vx-{n:02d}", f"player_vy-{n:02d}",
     f"player_ax-{n:02d}", f"player_ay-{n:02d}",
+    f"player_sep-{n:02d}", f"player_yabs-{n:02d}",
 ] for n in range(1, all_players + 1)]
 player_float_flattened_colnames = \
     [cc for c in player_float_flattened_colnames for cc in c]
