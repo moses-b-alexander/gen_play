@@ -1154,9 +1154,6 @@ def set_window(df: pd.DataFrame, window_len: int, downsample_rate: int=1):
 
     return df
 
-_TWO_MIN = 2 / 15  # 120_000 ms / 900_000 ms per quarter
-
-
 def slice_df(
     df: pd.DataFrame,
     max_score_diff: float | None = 0.14,
@@ -1164,26 +1161,6 @@ def slice_df(
     snap_x_range: tuple[float, float] | None = (0.20, 0.80),
     cut_2min: bool = True,
 ) -> pd.DataFrame:
-    """
-    Filter trajectories by play-level conditions. Operates
-    at trajectory granularity — either the whole play is
-    kept or dropped.
-
-    Parameters (all in the df's normalised units):
-      max_score_diff : |off - def| / 100
-                       0.14 = within 14 points
-      max_down       : play_down / 4
-                       0.50 = 1st or 2nd down only
-      snap_x_range   : (lo, hi) for play_snap_x in [0,1]
-                       (0.20, 0.80) = non-red-zone,
-                       non-own-endzone
-      cut_2min       : if True, drop plays in Q2 and Q4
-                       with play_time <= 2/15 (~2 min left).
-
-    Reads play context from frame index 2 (first real frame
-    after the start sentinel) where play-level features hold
-    their true values.
-    """
     frame2 = df.loc[df.index.get_level_values(1) == 2]
 
     mask = pd.Series(True, index=frame2.index)
@@ -1193,8 +1170,6 @@ def slice_df(
             frame2["play_score_difference"].abs()
             <= max_score_diff
         )
-    if max_down is not None:
-        mask &= frame2["play_down"] <= max_down
     if snap_x_range is not None:
         lo, hi = snap_x_range
         mask &= (
@@ -1204,7 +1179,7 @@ def slice_df(
     if cut_2min:
         late_q = frame2["play_quarter"].isin([0.50, 1.00])
         two_min_drill = (
-            late_q & (frame2["play_time"] <= _TWO_MIN)
+            late_q & (frame2["play_time"] <= (2 / 15))
         )
         mask &= ~two_min_drill
 
@@ -1213,14 +1188,12 @@ def slice_df(
         df.index.get_level_values(0).isin(valid_ids)
     ].copy()
 
-
 def postprocess_df(
     df: pd.DataFrame,
     sn: bool = False,
     ci: list[int] = list(range(len(play_catgs))),
     mw: int = 0, dr: int = 1,
     max_score_diff: float | None = None,
-    max_down: float | None = None,
     snap_x_range: tuple[float, float] | None = None,
     cut_2min: bool = False,
     rs: float | None = None,
@@ -1240,7 +1213,6 @@ def postprocess_df(
     df = slice_df(
         df,
         max_score_diff=max_score_diff,
-        max_down=max_down,
         snap_x_range=snap_x_range,
         cut_2min=cut_2min,
     )

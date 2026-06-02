@@ -86,7 +86,8 @@ df_u_f = df_u_f.copy()
 
 df_u_f = postprocess_df(
     df_u_f,
-    sn=reward_sign, ci=[0, ], mw=max_window, dr=downsampling
+    sn=+1, rs=1.0, ci=[0, ], mw=180, dr=1,
+    max_score_diff=0.21, snap_x_range=(0.20, 0.80), cut_2min=True,
 )
 df_u_f = df_u_f.copy()
 
@@ -186,8 +187,8 @@ print(s_str)
 run_id = ""
 
 # retsu0, run_id = train_bagged_model(
-#     # bag_ct=1, ratio=0.999,
-#     bag_ct=4, ratio=0.900,
+#     bag_ct=1, ratio=0.999,
+#     # bag_ct=4, ratio=0.900,
 #     # bag_ct=1024, ratio=0.001,
 #     df_m=df_u_f_train,
 #     pf_cls=PF, pf_args=pf_hps,
@@ -199,7 +200,7 @@ run_id = ""
 #     runner_device=learning_device
 # )
 
-if not run_id:  run_id = "9d7c670520bd4d49a34f8c2b866dc61b"
+if not run_id:  run_id = "7ac272e9d13a495fa201040a5f9162e6"
 
 retsu0 = []
 for r in load_models(run_id, learning_device):
@@ -208,7 +209,7 @@ for r in load_models(run_id, learning_device):
     mr.eval()
     retsu0.append((r[0], mr))
 
-num_eval_traj = batch_size * 1
+num_eval_traj = batch_size // 2
 eval_states, eval_ids, eval_df = produce_evaluation_states(
     num=num_eval_traj, df_e=df_u_f_test, random=False
 )
@@ -224,9 +225,11 @@ gend = [
 ]
 
 ips = list(range(num_eval_traj))
-for ip in ips[::4]:
-    a00, s00 = plot_play_2_new(None, orig[ip], gend[ip], num_timesteps, 1, show_def_to_off=True, show_off_to_def=False)
-    # a00, s00 = plot_play_2_new(None, orig[ip], gend[ip], num_timesteps, 1, show_def_to_off=False, show_off_to_def=True)
+for ip in ips[::2]:
+    a00, s00 = plot_play_2(
+        None, orig[ip], gend[ip], num_timesteps, 1,
+        show_def_to_off=True, show_off_to_def=False
+    )
     plt.show()
     plt.close("all")
 

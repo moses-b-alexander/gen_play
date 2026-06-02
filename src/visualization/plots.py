@@ -188,11 +188,11 @@ def plot_play_2(
     x1g, x2g = xs0g[1], xs1g[1]
     y1g, y2g = ys0g[1], ys1g[1]
 
-    vliner = axs[0].axvline(x=sxr, color="#008000", linestyle="--", zorder=8)
+    vliner = axs[0].axvline(x=sxr, color="#020402", linestyle="--", zorder=8)
     sc1r = axs[0].scatter(x1r, y1r, s=30, c="#0000FF", zorder=9)
     sc2r = axs[0].scatter(x2r, y2r, s=30, c="#FFA500", zorder=9)
 
-    vlineg = axs[1].axvline(x=sxg, color="#008000", linestyle="--", zorder=8)
+    vlineg = axs[1].axvline(x=sxg, color="#020402", linestyle="--", zorder=8)
     sc1g = axs[1].scatter(x1g, y1g, s=30, c="#0000FF", zorder=9)
     sc2g = axs[1].scatter(x2g, y2g, s=30, c="#FFA500", zorder=9)
 
