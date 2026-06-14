@@ -64,10 +64,8 @@ track_cols = {
     "player_position_db": "bool",
     "player_position_dl": "bool",
     "player_position_lb": "bool",
-    "player_position_ls": "bool",
     "player_position_na": "bool",
     "player_position_ol": "bool",
-    "player_position_pt": "bool",
     "player_position_qb": "bool",
     "player_position_rb": "bool",
     "player_position_te": "bool",
@@ -81,7 +79,6 @@ track_cols = {
     "player_vy": "float",
     "player_x": "float",
     "player_y": "float",
-    "player_sep": "float",
     "player_yabs": "float",
 }
 
@@ -98,10 +95,8 @@ player_cols = {
     "player_position_db": "bool",
     "player_position_dl": "bool",
     "player_position_lb": "bool",
-    "player_position_ls": "bool",
     "player_position_na": "bool",
     "player_position_ol": "bool",
-    "player_position_pt": "bool",
     "player_position_qb": "bool",
     "player_position_rb": "bool",
     "player_position_te": "bool",
@@ -115,7 +110,6 @@ player_cols = {
     "player_vy": "float",
     "player_x": "float",
     "player_y": "float",
-    "player_sep": "float",
     "player_yabs": "float",
 }
 

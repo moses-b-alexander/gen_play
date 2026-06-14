@@ -11,7 +11,7 @@ from data.names import (
     play_state_colnames,
     player_location_flattened_colnames,
     player_state_colnames,
-    reward_colnames
+    reward_colname
 )
 
 
@@ -38,7 +38,7 @@ def tensorize_df(
     action_tensor = action_tensor.to(tensorization_device)
 
     reward_tensor = torch.tensor(
-        df[reward_colnames].values, dtype=torch.float32)
+        df[[reward_colname]].values, dtype=torch.float32)
     reward_tensor = reward_tensor.to(tensorization_device)
 
     metadata_tensor = torch.tensor(

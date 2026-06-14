@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from ai.constants import batch_size, state_dim
+from ai.constants import state_dim
 from ai.utils import permute_batch_first
+from common.constants import seed
 from data.constants import reward_threshold
 from data.play_gfn import (
     PlayActions, PlayContainer, PlayEnv, PlayPreprocessor, PlayStates
@@ -43,10 +44,10 @@ def produce_evaluation_states(
     else:  num_n = 1
     if num_n <= 0 or num_n >= num_plays_eval:  num_n = 1
 
-    if random:
-        final_eval_ids = rng.choice(eval_ids, size=num_n, replace=False)
-    else:
-        final_eval_ids = eval_ids[:num_n]
+    if random:  rng = np.random.default_rng(None)
+    else:  rng = np.random.default_rng(seed)
+
+    final_eval_ids = rng.choice(eval_ids, size=num_n, replace=False)
 
     df_ee = pd.concat([
         df_e.loc[df_e.index.get_level_values(0) == fei,]
@@ -74,8 +75,7 @@ def build_trajectories_from_batch(
     actions = (actions.permute(1, 0, 2, 3).contiguous()).clone().detach()
     actions_traj = PlayActions(actions).to_device(tensor_device)
 
-    rewards_clamped = \
-        rewards.clamp(min=-reward_threshold, max=+reward_threshold)
+    rewards_clamped = rewards.clamp(min=0.0, max=reward_threshold)
     log_rewards = torch.log(rewards_clamped).to(tensor_device)
     log_rewards_traj = log_rewards
 

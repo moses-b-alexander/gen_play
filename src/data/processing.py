@@ -4,6 +4,9 @@ import json
 import numpy as np
 import os
 import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import xgboost as xgb # type: ignore
 
 from ai.constants import max_dx, max_dy
 from common.constants import (
@@ -17,19 +20,23 @@ from data.columns import (
     track_col_types, track_rename_cols
 )
 from data.constants import (
-    col_fillnas, col_types, fstv, game_time, lstv, num_drives, num_games,
-    play_catgs, reward_scale, train_index, test_index,
-    x_field_min, x_field_max, y_bnd, y_hash
+    col_fillnas, col_types,
+    fstv, game_time, km_alpha_decay, km_num_clusters, lstv,
+    num_drives, num_games,
+    play_catgs, train_index, test_index,
+    x_field_min, x_field_max,
+    xgb_max_depth, xgb_num_estimators, xgb_learning_rate,
+    xgb_subsample, xgb_colsample_bytree,
+    y_bnd, y_hash
 )
 from data.names import (
     action_flattened_colnames,
     frame_colnames, metadata_colnames, num_pos_colnames,
-    old_colnames, play_remove_colnames,
-    play_fill_colnames, play_state_colnames,
+    play_remove_colnames, play_state_colnames, play_xrec_derived_colnames,
     player_bool_flattened_colnames, player_float_flattened_colnames,
-    player_location_flattened_colnames, player_state_flattened_colnames,
+    player_location_flattened_colnames,
+    player_state_flattened_colnames,
     player_uuid_colnames,
-    reward_colnames,
     track_remove_colnames
 )
 
@@ -93,19 +100,25 @@ def get_data(
     play["szn"] = szn
 
     play = play.reset_index(drop=False)
+    play = play.drop(index=play.loc[play.play_uuid.isna(),].index)
     play = play.drop(index=
-        play.loc[(play.play_offense_team_short_name != tm) &
-            (play.play_defense_team_short_name != tm),].index)
+        play.loc[play.play_defensive_personnel.isna(),].index)
+    play = play.drop(index=
+        play.loc[play.play_offensive_personnel.isna(),].index)
+    play = play.drop(index=
+        play.loc[
+            (play.play_offense_team_short_name != tm) &
+            (play.play_defense_team_short_name != tm),
+        ].index)
     play = play.copy()
 
-    play = play.drop(columns=old_colnames, errors="ignore")
     play = play.drop(columns=play_remove_colnames, errors="ignore")
 
-    play = play.drop(index=play.loc[play.play_uuid.isna(),].index)
     play = play.drop(index=play.loc[play.week.isna(),].index)
     play = play.drop(index=play.loc[play.play_quarter == 5,].index)
     play = play.drop(index=
         play.loc[play.play_yards_gained < -x_field_max - 1e-6,].index)
+    play = play.drop(index=play.loc[play.play_yards_gained.isna(),].index)
     play = play.drop(index=
         play.loc[play.play_yards_gained > +x_field_max + 1e-6,].index)
     play = play.drop(index=
@@ -193,8 +206,8 @@ def get_data(
     "play_snap_center"] = True
     play.loc[play.play_snap_y > +np.abs(y_hash), "play_snap_right"] = True
 
-    for c in num_pos_colnames:
-        play.loc[play[c] < 0, c] = 0
+    play.loc[:, num_pos_colnames] = \
+        play.loc[:, num_pos_colnames].clip(lower=0)
 
     play = play.drop(columns=[
         "week", "play_clock", "play_penalty_types",
@@ -298,8 +311,7 @@ def get_data(
         (track.player_defense & (
             (track.position_code == "OL") |
             (track.position_code == "TE") | (track.position_code == "WR") |
-            (track.position_code == "RB") | (track.position_code == "QB") |
-            (track.position_code == "P") | (track.position_code == "LS")
+            (track.position_code == "RB") | (track.position_code == "QB")
         )),
     "play_uuid"].unique()
     invalid_plays_2_offense = track.loc[
@@ -317,7 +329,6 @@ def get_data(
     track[[
         "player_position_ol", "player_position_te", "player_position_wr",
         "player_position_rb", "player_position_qb",
-        "player_position_pt", "player_position_ls",
         "player_position_db", "player_position_lb", "player_position_dl",
     ]] = False
     track["player_position_na"] = True
@@ -326,15 +337,12 @@ def get_data(
     track.loc[track.position_code == "WR", "player_position_wr"] = True
     track.loc[track.position_code == "RB", "player_position_rb"] = True
     track.loc[track.position_code == "QB", "player_position_qb"] = True
-    track.loc[track.position_code == "P", "player_position_pt"] = True
-    track.loc[track.position_code == "LS", "player_position_ls"] = True
     track.loc[track.position_code == "DB", "player_position_db"] = True
     track.loc[track.position_code == "LB", "player_position_lb"] = True
     track.loc[track.position_code == "DL", "player_position_dl"] = True
     track["player_position_not_na"] = track[[
         "player_position_ol", "player_position_te", "player_position_wr",
         "player_position_rb", "player_position_qb",
-        "player_position_pt", "player_position_ls",
         "player_position_db", "player_position_lb", "player_position_dl",
     ]].any(axis=1)
     track["player_position_na"] = ~track["player_position_not_na"]
@@ -398,29 +406,6 @@ def get_data(
     track["player_ay"] = track.player_ay.div((fps ** 2))
 
     track["player_yabs"] = track["player_y"].abs().astype(col_types["float"])
-
-    _loc = track[[
-        "play_uuid", "frame_time", "player_uuid",
-        "player_offense", "player_x", "player_y",
-    ]]
-    _opp = _loc.rename(columns={
-        "player_uuid": "_opp_uuid", "player_offense": "_opp_off",
-        "player_x": "_opp_x", "player_y": "_opp_y",
-    })
-    _cross = _loc.merge(_opp, on=["play_uuid", "frame_time"])
-    _cross = _cross[_cross.player_offense != _cross._opp_off]
-    _cross["_d"] = np.sqrt(
-        (_cross.player_x - _cross._opp_x) ** 2 +
-        (_cross.player_y - _cross._opp_y) ** 2
-    ).astype(np.float32)
-    _sep = _cross.groupby(
-        ["play_uuid", "frame_time", "player_uuid"], sort=False
-    )["_d"].min().rename("player_sep")
-    track = track.merge(
-        _sep.reset_index(), on=["play_uuid", "frame_time", "player_uuid"],
-        how="left",
-    )
-    track["player_sep"] = track["player_sep"].astype(col_types["float"])
 
     track = track.sort_values(by=(
         frame_colnames[:-1] + ["player_offense", "player_x", "player_yabs"]
@@ -608,63 +593,6 @@ def get_data(
     df.loc[df.play_score_difference.abs() > 1e-2,
         "play_score_equal"] = False
 
-    _off_vals = np.column_stack([
-        df[f"player_offense-{n:02d}"].values.astype(np.float32)
-        for n in range(1, all_players + 1)
-    ])
-    _sep_vals = np.column_stack([
-        df[f"player_sep-{n:02d}"].values.astype(np.float32)
-        for n in range(1, all_players + 1)
-    ])
-    _x_vals = np.column_stack([
-        df[f"player_x-{n:02d}"].values.astype(np.float32)
-        for n in range(1, all_players + 1)
-    ])
-    _qb_vals = np.column_stack([
-        df[f"player_position_qb-{n:02d}"].values.astype(np.float32)
-        for n in range(1, all_players + 1)
-    ])
-    _is_off_qb = (_qb_vals == 1) & (_off_vals == 1)
-    _qb_sep = np.where(_is_off_qb, _sep_vals, np.nan)
-    _qb_sep_f = np.where(np.isnan(_qb_sep), -np.inf, _qb_sep)
-    _no_qb = np.all(~np.isfinite(_qb_sep_f), axis=1)
-    _rows = np.arange(len(df))
-    _qb_idx = np.argmax(_qb_sep_f, axis=1)
-    df["play_qb_pressure"] = np.where(
-        _no_qb, np.nan, _qb_sep[_rows, _qb_idx]
-    ).astype(col_types["float"])
-    _wr_vals = np.column_stack([
-        df[f"player_position_wr-{n:02d}"].values.astype(np.float32)
-        for n in range(1, all_players + 1)
-    ])
-    _te_vals = np.column_stack([
-        df[f"player_position_te-{n:02d}"].values.astype(np.float32)
-        for n in range(1, all_players + 1)
-    ])
-    _rb_vals = np.column_stack([
-        df[f"player_position_rb-{n:02d}"].values.astype(np.float32)
-        for n in range(1, all_players + 1)
-    ])
-    _is_rec = (
-        (_wr_vals == 1) | (_te_vals == 1) | (_rb_vals == 1)
-    ) & (_off_vals == 1) & (_x_vals > 0)
-    _rec_sep = np.where(_is_rec, _sep_vals, np.nan)
-    _rec_x = np.where(_is_rec, _x_vals, np.nan)
-    _rec_sep_f = np.where(np.isnan(_rec_sep), -np.inf, _rec_sep)
-    _no_rec = np.all(~np.isfinite(_rec_sep_f), axis=1)
-    _tgt_idx = np.argmax(_rec_sep_f, axis=1)
-    _tgt_sep = np.where(_no_rec, np.nan, _rec_sep[_rows, _tgt_idx])
-    _tgt_depth = np.where(_no_rec, np.nan, _rec_x[_rows, _tgt_idx])
-    df["play_tgt_sep"] = _tgt_sep.astype(col_types["float"])
-    df["play_tgt_depth"] = _tgt_depth.astype(col_types["float"])
-
-    df["play_qb_pressure"] = \
-        df["play_qb_pressure"].fillna(col_types["float"](0.0))
-    df["play_tgt_sep"] = \
-        df["play_tgt_sep"].fillna(col_types["float"](0.0))
-    df["play_tgt_depth"] = \
-        df["play_tgt_depth"].fillna(col_types["float"](0.0))
-
     df["play_time_since_start"] = \
         df["frame_time"].astype(col_types["float"])
     df["play_time_since_snap"] = \
@@ -804,6 +732,9 @@ def get_data(
     df = df.drop(columns=player_uuid_colnames)
     df = df.copy()
 
+    df[["play_formation_entropy", "play_formation_distance"]] = \
+        col_types["float"](0.0)
+
     df["play_padded"] = col_types["float"](False)
     df["play_real"] = col_types["float"](True)
     df = df.copy()
@@ -826,7 +757,8 @@ def get_data(
 
     df = df.rename(columns={"play_uuid": "play_uuid0"})
     df = df.drop(columns=[
-        "play_drive_uuid", "play_game_uuid",
+        # "play_drive_uuid",
+        "play_game_uuid",
     ])
     df = df.sort_values(by=[
         "game_season", "game_week",
@@ -846,6 +778,7 @@ def pad_plays(
     def pad_fn(sdf: pd.DataFrame) -> pd.DataFrame:
         sdf = sdf.copy()
         dfid = str(sdf.index.min())
+        dfdr = sdf.play_drive_uuid.iloc[0]
         pad_size = pad_ct - sdf.shape[0]
         fstrow = sdf.iloc[0]
 
@@ -971,6 +904,7 @@ def pad_plays(
         padded_df = padded_df.copy()
 
         padded_df["play_uuid1"] = dfid
+        padded_df["play_drive"] = dfdr
         padded_df["play_idx"] = (
             padded_df.groupby("play_uuid1", sort=False)
             .transform("cumcount") + 1
@@ -983,14 +917,16 @@ def pad_plays(
     p_df = df.groupby(
         "play_uuid0", group_keys=False, sort=False
     ).apply(pad_fn, include_groups=False)
-    p_df = p_df.drop(columns=["play_time_since_snap"])
+    p_df = p_df.drop(columns=[
+        "play_time_since_snap", "play_drive_uuid",
+        "play_time_before_snap", "play_time_after_snap"
+    ])
+    # p_df = p_df.drop(columns=["play_time_since_snap", "play_drive_uuid"])
     p_df = p_df.copy()
 
-    p_cols = [
-        c for c in p_df.columns
-        if c != "play_uuid0" and c != "play_uuid1" and \
-            c != "play_idx" and c != "play_type"
-    ]
+    p_cols = [c for c in p_df.columns if c not in [
+        "play_uuid0", "play_drive", "play_idx", "play_type", "play_uuid1"
+    ]]
     p_df[p_cols] = p_df[p_cols].astype(dtyp)
     p_df = p_df.copy()
 
@@ -998,6 +934,7 @@ def pad_plays(
     p_df["play_idx"] = \
         p_df["play_idx"].astype(col_types["float"]).astype(int)
     p_df["play_uuid1"] = p_df["play_uuid1"].astype("object")
+    p_df["play_drive"] = p_df["play_drive"].astype("object")
     p_df = p_df.copy()
 
     p_df = p_df.reset_index(drop=True)
@@ -1020,16 +957,21 @@ def pad_plays(
 
     return p_df
 
-def set_reward(df: pd.DataFrame, sn: bool=False, rs: float | None = None) -> pd.DataFrame:
+def set_reward(
+    df: pd.DataFrame, sn: bool=False, rs: float=1.0, rb: float=1.0,
+    colname: str="play_yards_gained"
+) -> pd.DataFrame:
     df = df.copy()
 
-    scale = rs if rs is not None else reward_scale
-    if not sn:  sgn = -1
-    else:  sgn = +1
-    rwd = lambda yg: (scale * (1 / (1 + (np.exp(sgn * yg)))))
-    df["play_yards_gained"] = df["play_yards_gained"].apply(rwd)
-    df["play_yards_gained"] = df["play_yards_gained"].astype(dtyp)
+    sgn = -1 if not sn else + 1
+    scale = rs if isinstance(rs, float) and rs > 0 else 1.0
+    beta = rb if isinstance(rb, float) and rb > 0 else 1.0
+    if colname != "play_yards_gained" and colname != "play_xrec":
+        colname = "play_yards_gained"
 
+    rwd = lambda yg: (scale * (1 / (1 + (np.exp(sgn * yg * beta)))))
+    df[colname] = df[colname].apply(rwd)
+    df[colname] = df[colname].astype(dtyp)
     df = df.copy()
 
     return df
@@ -1041,7 +983,6 @@ def set_zero_play(df: pd.DataFrame) -> pd.DataFrame:
         col_types["float"](0.0)
     df.loc[df.play_padded == col_types["float"](1.0), "play_true_length"] = \
         col_types["float"](0.0)
-
     df = df.copy()
 
     return df
@@ -1059,12 +1000,13 @@ def set_zero_player(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df.play_padded == col_types["float"](1.0),
         [f"player_post_snap-{n:02d}" for n in range(1, all_players + 1)]
     ] = col_types["float"](0.0)
-
     df = df.copy()
 
     return df
 
-def set_category(df: pd.DataFrame, catg_idxs: list[int]) -> pd.DataFrame:
+def set_category(
+    df: pd.DataFrame, catg_idxs: list[int]=list(range(len(play_catgs)))
+) -> pd.DataFrame:
     df = df.copy()
 
     catgs = [
@@ -1072,15 +1014,46 @@ def set_category(df: pd.DataFrame, catg_idxs: list[int]) -> pd.DataFrame:
         if ci in list(range(len(play_catgs)))
     ]
     df = df.drop(index=df.loc[~df.play_type.isin(catgs),].index)
-
     df = df.copy()
 
     return df
 
-def set_window(df: pd.DataFrame, window_len: int, downsample_rate: int=1):
+def set_personnel(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    num_t = max(df.index.get_level_values(1).tolist())
+    for p in ["qb", "rb", "wr", "te", "ol", "db", "lb", "dl"]:
+        col = f"{p}_ct"
+        df[col] = df[[
+            f"player_position_{p}-{n:02d}" for n in range(1, all_players + 1)
+        ]].astype(int).sum(axis=1)
+    invalid_ids = list(df.loc[
+        (df.play_is_first != col_types["float"](1.0)) &
+        ((df.qb_ct > 1) | (df.qb_ct < 1) |
+        (df.rb_ct > 2) | (df.rb_ct < 0) |
+        (df.wr_ct > 4) | (df.wr_ct < 0) |
+        (df.te_ct > 3) | (df.te_ct < 0) |
+        (df.ol_ct > 6) | (df.ol_ct < 4) |
+        (df.dl_ct > 5) | (df.dl_ct < 1) |
+        (df.lb_ct > 5) | (df.lb_ct < 1) |
+        (df.db_ct > 7) | (df.db_ct < 3)) &
+        (df.play_padded != col_types["float"](1.0)) &
+        (df.play_is_last != col_types["float"](1.0)),
+    ].index.get_level_values(0))
+
+    df = df.drop(index=
+        df.loc[df.index.get_level_values(0).isin(invalid_ids)].index)
+    df.index = df.index.remove_unused_levels()
+    df = df.drop(columns=[
+        "qb_ct", "rb_ct", "wr_ct", "te_ct", "ol_ct", "db_ct", "lb_ct", "dl_ct"
+    ])
+    df = df.copy()
+
+    return df
+
+def set_window(df: pd.DataFrame, window_len: int=0, downsample_rate: int=1):
+    df = df.copy()
+
+    num_t = int(df.index.get_level_values(1).max())
     if window_len > 1 and window_len < num_t - 1:
         df = df[
             (df.index.get_level_values(1) < window_len + 1) | \
@@ -1102,7 +1075,7 @@ def set_window(df: pd.DataFrame, window_len: int, downsample_rate: int=1):
 
     df = df.copy()
 
-    num_t = max(df.index.get_level_values(1).tolist())
+    num_t = int(df.index.get_level_values(1).max())
     downsample = fps // downsample_rate
     if downsample >= 2 and downsample <= fps // 2:
         ds_keys = [df.index.names[0], "ds"]
@@ -1154,55 +1127,153 @@ def set_window(df: pd.DataFrame, window_len: int, downsample_rate: int=1):
 
     return df
 
+def add_formation_feature(df: pd.DataFrame, km_hps: dict) -> pd.DataFrame:
+    df = df.copy()
+    num_p = len(list(set(df.index.get_level_values(0).tolist())))
+    num_t = int(df.index.get_level_values(1).max())
+
+    valid_1, valid_2 = False, False
+    if km_hps.get("alpha_decay"):
+        if km_hps["alpha_decay"] > 0.0 and km_hps["alpha_decay"] < 1.0:
+            valid_1 = True
+    if km_hps.get("num_clusters"):
+        if km_hps["num_clusters"] > 1 and km_hps["num_clusters"] < num_p - 1:
+            valid_2 = True
+    if not valid_1 or not valid_2:  return df
+
+    play_df_form = df.loc[df.index.get_level_values(1) == 2,].copy()
+    idxs_off = [
+        n for n in range(1, all_players + 1)
+        if bool(play_df_form[f"player_offense-{n:02d}"].iloc[0])
+    ]
+    idxs_def = [
+        n for n in range(1, all_players + 1)
+        if bool(play_df_form[f"player_defense-{n:02d}"].iloc[0])
+    ]
+    ct_cols, ct_ema_cols = [], []
+    for roles, idxs in [
+        (["rb", "wr", "te", "ol"], idxs_off), (["db", "lb", "dl"], idxs_def)
+    ]:
+        for role in roles:
+            col = f"{role}_ct"
+            play_df_form[col] = play_df_form[[
+                f"player_position_{role}-{n:02d}" for n in idxs
+            ]].astype(int).sum(axis=1)
+            ct_cols.append(col)
+            ct_ema_cols.append(f"{col}_ema")
+
+    play_df_form[ct_ema_cols] = \
+        play_df_form.groupby("play_drive")[ct_cols].transform(lambda s: s.ewm(
+            alpha=km_hps["alpha_decay"], adjust=False, method="single"
+        ).mean())
+
+    x_form = play_df_form[ct_ema_cols].to_numpy(dtype=dtyp)
+    x_form = x_form[:, x_form.var(axis=0) > 0]
+    x_form = StandardScaler().fit_transform(x_form)
+
+    model = KMeans(
+        n_clusters=km_hps["num_clusters"], random_state=seed, n_init="auto")
+    cdists = model.fit_transform(x_form)
+
+    mdists = -cdists / cdists.mean(axis=1, keepdims=True)
+    mdists-= mdists.max(axis=1, keepdims=True)
+    edists = np.exp(mdists)
+    edists /= edists.sum(axis=1, keepdims=True)
+    hdists = -(edists * np.log(edists + 1e-6)).sum(axis=1)
+
+    df["play_formation_distance"] = \
+        np.repeat(cdists.min(axis=1), num_t).astype(dtyp)
+    df["play_formation_entropy"] = np.repeat(hdists, num_t).astype(dtyp)
+    df = df.drop(columns=["play_drive"])
+
+    df.loc[
+        df.play_is_first == col_types["float"](1.0), "play_formation_entropy"
+    ] = col_types["float"](0.0)
+    df.loc[
+        df.play_padded == col_types["float"](1.0), "play_formation_entropy"
+    ] = col_types["float"](0.0)
+    df.loc[
+        df.play_is_last == col_types["float"](1.0), "play_formation_entropy"
+    ] = col_types["float"](lstv)
+
+    df.loc[
+        df.play_is_first == col_types["float"](1.0), "play_formation_distance"
+    ] = col_types["float"](0.0)
+    df.loc[
+        df.play_padded == col_types["float"](1.0), "play_formation_distance"
+    ] = col_types["float"](0.0)
+    df.loc[
+        df.play_is_last == col_types["float"](1.0), "play_formation_distance"
+    ] = col_types["float"](lstv)
+
+    df = df.copy()
+
+    return df
+
+def add_xrec_feature(df: pd.DataFrame, xgb_hps: dict) -> pd.DataFrame:
+    df = df.copy()
+    num_t = int(df.index.get_level_values(1).max())
+
+    play_df_x = df.loc[df.index.get_level_values(1) == 2,].copy()
+    play_df_y = df.loc[df.index.get_level_values(1) == num_t,].copy()
+
+    x_xrec = play_df_x[play_xrec_derived_colnames].to_numpy(dtype=dtyp)
+    y = play_df_y["play_yards_gained"].to_numpy(dtype=dtyp)
+
+    scaler = StandardScaler()
+    x_xrec_scaled = scaler.fit_transform(x_xrec).astype(dtyp)
+
+    model = xgb.XGBRegressor( # no guard
+        **(xgb_hps | {"n_jobs": 1, "random_state": seed, "verbosity": 0}))
+    model.fit(x_xrec_scaled, y)
+    xrec_vals = model.predict(x_xrec_scaled)
+
+    df["play_xrec"] = np.repeat(xrec_vals, num_t).astype(dtyp)
+    df.loc[df.play_is_last != col_types["float"](1.0), "play_xrec"] = \
+        col_types["float"](0.0)
+    df = df.copy()
+
+    return df
+
 def slice_df(
     df: pd.DataFrame,
-    max_score_diff: float | None = 0.14,
-    max_down: float | None = 0.50,
-    snap_x_range: tuple[float, float] | None = (0.20, 0.80),
-    cut_2min: bool = True,
+    max_score_diff: float=1.00,
+    snap_x_range: tuple[float, float]=(0.00, 1.00),
+    cut_two_min: bool=False
 ) -> pd.DataFrame:
-    frame2 = df.loc[df.index.get_level_values(1) == 2]
+    sdf = df.loc[df.index.get_level_values(1) == 2].copy()
 
-    mask = pd.Series(True, index=frame2.index)
+    mask = pd.Series(True, index=sdf.index)
 
-    if max_score_diff is not None:
+    if max_score_diff > 0.00 and max_score_diff < 1.00:
         mask &= (
-            frame2["play_score_difference"].abs()
-            <= max_score_diff
+            sdf["play_score_difference"].abs() <= max_score_diff
         )
-    if snap_x_range is not None:
+    if snap_x_range[0] > 0.00 and snap_x_range[1] < 1.00:
         lo, hi = snap_x_range
-        mask &= (
-            (frame2["play_snap_x"] >= lo) &
-            (frame2["play_snap_x"] <= hi)
-        )
-    if cut_2min:
-        late_q = frame2["play_quarter"].isin([0.50, 1.00])
-        two_min_drill = (
-            late_q & (frame2["play_time"] <= (2 / 15))
-        )
-        mask &= ~two_min_drill
+        if lo < hi:
+            mask &= (
+                (sdf["play_snap_x"] >= lo) & (sdf["play_snap_x"] <= hi))
+    if cut_two_min:
+        even_q = sdf["play_quarter"].isin([0.50, 1.00])
+        two_m = (even_q & (sdf["play_time"] <= (2 / 15)))
+        mask &= ~two_m
 
-    valid_ids = frame2.loc[mask].index.get_level_values(0)
-    return df.loc[
-        df.index.get_level_values(0).isin(valid_ids)
-    ].copy()
+    valid_ids = sdf.loc[mask].index.get_level_values(0)
+    df_f = df.loc[df.index.get_level_values(0).isin(valid_ids)].copy()
+
+    return df_f
 
 def postprocess_df(
     df: pd.DataFrame,
-    sn: bool = False,
-    ci: list[int] = list(range(len(play_catgs))),
-    mw: int = 0, dr: int = 1,
-    max_score_diff: float | None = None,
-    snap_x_range: tuple[float, float] | None = None,
-    cut_2min: bool = False,
-    rs: float | None = None,
-    skip_reward: bool = False,
+    ci: list[int],
+    mw: int, dr: int,
+    ad: float, nc: int,
+    sn: bool, rs: float, rb: float,
+    msd: float, sxr: tuple[float, float], ctm: bool,
+    add_xrec:  bool=False, skip_reward: bool=False
 ) -> pd.DataFrame:
     df = df.copy()
-
-    if not skip_reward:
-        df = set_reward(df, sn=sn, rs=rs)
 
     df = set_zero_play(df)
 
@@ -1210,17 +1281,28 @@ def postprocess_df(
 
     df = set_category(df, catg_idxs=ci)
 
-    df = slice_df(
-        df,
-        max_score_diff=max_score_diff,
-        snap_x_range=snap_x_range,
-        cut_2min=cut_2min,
-    )
+    df = set_personnel(df)
 
     df = set_window(df, window_len=mw, downsample_rate=dr)
 
-    df = df.drop(columns=["index"])
+    df = add_formation_feature(df, {"alpha_decay": ad, "num_clusters": nc})
 
+    if add_xrec:
+        xgb_hps = dict(
+            n_estimators=xgb_num_estimators, max_depth=xgb_max_depth,
+            learning_rate=xgb_learning_rate,
+            subsample=xgb_subsample, colsample_bytree=xgb_colsample_bytree
+        )
+        df = add_xrec_feature(df, xgb_hps)
+    if not skip_reward:
+        df = set_reward(df, sn=sn, rs=rs, rb=rb, colname="play_yards_gained")
+        if add_xrec:
+            df = set_reward(df, sn=sn, rs=rs, rb=rb, colname="play_xrec")
+
+    df = slice_df(
+        df, max_score_diff=msd, snap_x_range=sxr, cut_two_min=ctm)
+
+    df = df.drop(columns=["index"])
     df = df.copy()
 
     return df

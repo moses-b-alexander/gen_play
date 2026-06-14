@@ -2,7 +2,7 @@
 from math import log
 import numpy as np
 
-from common.constants import all_players, dtyp, fps, team_players
+from common.constants import all_players, dtyp, fps
 
 
 train_index, test_index = 15, 1
@@ -19,15 +19,39 @@ num_drives = game_time // 4
 
 max_play_frames = (fps * 60) / 4.00
 
-reward_sign = False
+catg_idxs = [0, ]
+# catg_idxs = [0, 1, ]
+
+max_window = 180
+downsampling = 1
+
+km_alpha_decay = 0.15
+km_num_clusters = 16
+
+kmnc = float(km_num_clusters)
 
 reward_threshold = 1.00
 reward_threshold = abs(reward_threshold)
 if reward_threshold > x_field_max or reward_threshold < 1 / x_field_max:
     reward_threshold = 1.00
 if reward_threshold > 1.00:  reward_threshold /= x_field_max
+reward_threshold += 1e-6
 
+reward_sign = False
 reward_scale = 1.00
+reward_beta = 10.00
+
+xgb_num_estimators = 100
+xgb_max_depth = 4
+xgb_learning_rate = 0.1
+xgb_subsample = 0.8
+xgb_colsample_bytree = 0.8
+
+max_score_diff = 21 / 100
+
+snap_x_range = (20 / x_field_max, 80 / x_field_max)
+
+cut_two_min = True
 
 fstv, lstv = dtyp(-1.0), dtyp(+1.0)
 
@@ -59,51 +83,45 @@ state_mapping = {
     6: ("float", "play_defense_play", 0.0, 1.0, "uniform"),
     7: ("float", "play_defense_timeouts", 0.0, 1.0, "uniform"),
     8: ("float", "play_down", 0.0, 1.0, "uniform"),
-    9: ("float", "play_offense_drive", 0.0, 1.0, "uniform"),
-    10: ("float", "play_offense_game", 0.0, 1.0, "uniform"),
-    11: ("bool", "play_offense_in_lead", False, True, "bernoulli"),
-    12: ("bool", "play_offense_is_home_team", False, True, "bernoulli"),
-    13: ("float", "play_offense_play", 0.0, 1.0, "uniform"),
-    14: ("float", "play_offense_timeouts", 0.0, 1.0, "uniform"),
-    15: ("float", "play_quarter", 0.0, 1.0, "uniform"),
-    16: ("float", "play_score_difference", -1.0, +1.0, "normal"),
-    17: ("float", "play_score_equal", False, True, "bernoulli"),
-    18: ("bool", "play_snap_center", False, True, "bernoulli"),
-    19: ("bool", "play_snap_left", False, True, "bernoulli"),
-    20: ("bool", "play_snap_right", False, True, "bernoulli"),
-    21: ("float", "play_snap_x", 0.0, 1.0, "uniform"),
-    22: ("float", "play_snap_y", -1.0, +1.0, "normal"),
-    23: ("float", "play_time", 0.0, 1.0, "uniform"),
-    24: ("float", "play_time_after_snap", 0.0, 1.0, "uniform"),
-    25: ("float", "play_time_before_snap", 0.0, 1.0, "uniform"),
+    9: ("float", "play_formation_distance", 0.0, kmnc, "uniform"),
+    10: ("float", "play_formation_entropy", 0.0, log(kmnc), "uniform"),
+    11: ("float", "play_offense_drive", 0.0, 1.0, "uniform"),
+    12: ("float", "play_offense_game", 0.0, 1.0, "uniform"),
+    13: ("bool", "play_offense_in_lead", False, True, "bernoulli"),
+    14: ("bool", "play_offense_is_home_team", False, True, "bernoulli"),
+    15: ("float", "play_offense_play", 0.0, 1.0, "uniform"),
+    16: ("float", "play_offense_timeouts", 0.0, 1.0, "uniform"),
+    17: ("float", "play_quarter", 0.0, 1.0, "uniform"),
+    18: ("float", "play_score_difference", -1.0, +1.0, "normal"),
+    19: ("float", "play_score_equal", False, True, "bernoulli"),
+    20: ("bool", "play_snap_center", False, True, "bernoulli"),
+    21: ("bool", "play_snap_left", False, True, "bernoulli"),
+    22: ("bool", "play_snap_right", False, True, "bernoulli"),
+    23: ("float", "play_snap_x", 0.0, 1.0, "uniform"),
+    24: ("float", "play_snap_y", -1.0, +1.0, "normal"),
+    25: ("float", "play_time", 0.0, 1.0, "uniform"),
     26: ("float", "play_yards_needed", 0.0, 1.0, "uniform"),
-    27: ("float", "play_qb_pressure", 0.0, 2.0, "uniform"),
-    28: ("float", "play_tgt_sep", 0.0, 2.0, "uniform"),
-    29: ("float", "play_tgt_depth", -0.2, +1.2, "uniform"),
-    30: ("float", "play_true_length", 0.0, 10000.0, "uniform"),
-    31: ("float", "player_ax", -1.0, +1.0, "normal"),
-    32: ("float", "player_ay", -1.0, +1.0, "normal"),
-    33: ("bool", "player_position_db", False, True, "bernoulli"),
-    34: ("bool", "player_position_dl", False, True, "bernoulli"),
-    35: ("bool", "player_position_lb", False, True, "bernoulli"),
-    36: ("bool", "player_position_ls", False, True, "bernoulli"),
-    37: ("bool", "player_position_na", False, True, "bernoulli"),
-    38: ("bool", "player_position_ol", False, True, "bernoulli"),
-    39: ("bool", "player_position_pt", False, True, "bernoulli"),
-    40: ("bool", "player_position_qb", False, True, "bernoulli"),
-    41: ("bool", "player_position_rb", False, True, "bernoulli"),
-    42: ("bool", "player_position_te", False, True, "bernoulli"),
-    43: ("bool", "player_position_wr", False, True, "bernoulli"),
-    44: ("bool", "player_post_snap", False, True, "bernoulli"),
-    45: ("bool", "player_pre_snap", False, True, "bernoulli"),
-    46: ("float", "player_vx", -1.0, +1.0, "normal"),
-    47: ("float", "player_vy", -1.0, +1.0, "normal"),
-    48: ("float", "player_x", -0.2, +1.2, "uniform"),
-    49: ("float", "player_y", -1.0, +1.0, "normal"),
-    50: ("float", "player_sep", 0.0, 2.0, "uniform"),
-    51: ("float", "player_yabs", 0.0, 1.0, "uniform"),
-    52: ("bool", "player_defense", False, True, "bernoulli"),
-    53: ("bool", "player_offense", False, True, "bernoulli"),
+    27: ("float", "play_true_length", 0.0, 10000.0, "uniform"),
+    28: ("float", "player_ax", -1.0, +1.0, "normal"),
+    29: ("float", "player_ay", -1.0, +1.0, "normal"),
+    30: ("bool", "player_position_db", False, True, "bernoulli"),
+    31: ("bool", "player_position_dl", False, True, "bernoulli"),
+    32: ("bool", "player_position_lb", False, True, "bernoulli"),
+    33: ("bool", "player_position_na", False, True, "bernoulli"),
+    34: ("bool", "player_position_ol", False, True, "bernoulli"),
+    35: ("bool", "player_position_qb", False, True, "bernoulli"),
+    36: ("bool", "player_position_rb", False, True, "bernoulli"),
+    37: ("bool", "player_position_te", False, True, "bernoulli"),
+    38: ("bool", "player_position_wr", False, True, "bernoulli"),
+    39: ("bool", "player_post_snap", False, True, "bernoulli"),
+    40: ("bool", "player_pre_snap", False, True, "bernoulli"),
+    41: ("float", "player_vx", -1.0, +1.0, "normal"),
+    42: ("float", "player_vy", -1.0, +1.0, "normal"),
+    43: ("float", "player_x", -0.2, +1.2, "uniform"),
+    44: ("float", "player_y", -1.1, +1.1, "normal"),
+    45: ("float", "player_yabs", 0.0, 1.1, "uniform"),
+    46: ("bool", "player_defense", False, True, "bernoulli"),
+    47: ("bool", "player_offense", False, True, "bernoulli"),
 }
 
 season_count = 1

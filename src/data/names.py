@@ -8,7 +8,8 @@ metadata_colnames = [
     "game_playoffs",
 ]
 
-reward_colnames = ["play_yards_gained"]
+reward_colname = "play_yards_gained"
+# reward_colname = "play_xrec"
 
 action_colnames = [
     [f"player_dx-{n:02d}", f"player_dy-{n:02d}"]
@@ -20,60 +21,33 @@ play_state_colnames = [
     "game_season", "game_week",
     "play_defense_drive", "play_defense_game", "play_defense_in_lead",
     "play_defense_is_home_team", "play_defense_play", "play_defense_timeouts",
-    "play_down",
+    "play_down", "play_formation_distance", "play_formation_entropy",
     "play_offense_drive", "play_offense_game", "play_offense_in_lead",
     "play_offense_is_home_team", "play_offense_play", "play_offense_timeouts",
     "play_quarter", "play_score_difference", "play_score_equal",
     "play_snap_center", "play_snap_left", "play_snap_right",
     "play_snap_x", "play_snap_y",
-    "play_time", "play_time_after_snap", "play_time_before_snap",
+    "play_time",
     "play_yards_needed",
-    "play_qb_pressure", "play_tgt_sep", "play_tgt_depth",
     "play_true_length",
 ]
 player_state_colnames = [[
     f"player_ax-{n:02d}", f"player_ay-{n:02d}",
     f"player_position_db-{n:02d}", f"player_position_dl-{n:02d}",
-    f"player_position_lb-{n:02d}", f"player_position_ls-{n:02d}",
+    f"player_position_lb-{n:02d}",
     f"player_position_na-{n:02d}",
-    f"player_position_ol-{n:02d}", f"player_position_pt-{n:02d}",
+    f"player_position_ol-{n:02d}",
     f"player_position_qb-{n:02d}", f"player_position_rb-{n:02d}",
     f"player_position_te-{n:02d}", f"player_position_wr-{n:02d}",
     f"player_pre_snap-{n:02d}", f"player_post_snap-{n:02d}",
     f"player_vx-{n:02d}", f"player_vy-{n:02d}",
     f"player_x-{n:02d}", f"player_y-{n:02d}",
-    f"player_sep-{n:02d}", f"player_yabs-{n:02d}",
+    f"player_yabs-{n:02d}",
     f"player_defense-{n:02d}", f"player_offense-{n:02d}",
 ] for n in range(1, all_players + 1)]
 player_state_flattened_colnames = \
     [c for l in player_state_colnames for c in l]
 state_colnames = play_state_colnames + player_state_flattened_colnames
-
-old_colnames = [
-    "Unnamed: 0",
-    "play_prob_field_goal", "play_prob_no_score", "play_prob_opp_field_goal",
-    "play_prob_opp_safety", "play_prob_opp_touchdown", "play_prob_safety",
-    "play_prob_touchdown", "play_ep", "play_scrimmage_epa",
-    "play_prob_made_field_goal", "play_fg_ep", "play_fg_epa",
-    "play_snap_locations",
-    "play_player_role_x", "play_player_role_y", "play_player_role_z",
-    "play_player_role_f", "play_player_role_h",
-    "play_start_video_timestamp_angle2", "play_end_video_timestamp_angle2",
-    "play_start_video_timestamp_angle3", "play_end_video_timestamp_angle3",
-    "play_video_info", "play_two_minute", "play_four_minute",
-    "play_defensive_coverage", "play_blitz_type", "play_blitz_players",
-    "play_blitz_jersey_numbers", "play_blitz_depth", "play_pass_rushers",
-    "play_pass_coverage_players", "play_defensive_front",
-    "play_defensive_front_players", "play_defensive_front_num_players",
-    "play_mofo", "play_zone_coverage_prob", "play_offensive_substitutions",
-    "play_defensive_substitutions", "play_incompletion_types",
-    "play_garbage_time", "play_offensive_players",
-    "play_offensive_skill_players", "play_defensive_players",
-    "play_pass_direction", "play_pass_width", "play_bunched_players",
-    "play_previous_play_uuid", "play_next_play_uuid", "play_run_gap_1yard",
-    "play_yards_run_from_los", "play_target_alignment_position_id",
-    "play_target_route", "gsis_play_id_db", "gsis_play_id_fix", "null_gsis",
-]
 
 num_pos_colnames = [
     "play_quarter", "play_time", "play_snap_x", "play_down",
@@ -83,6 +57,7 @@ num_pos_colnames = [
 ]
 
 play_remove_colnames = [
+    "Unnamed: 0",
     "season", "gsis_play_id", "gsis_game_id", "gsis_old_game_id",
     "play_game_index", "play_drive_index",
     "play_start_event_index", "play_end_event_index",
@@ -141,6 +116,28 @@ play_remove_colnames = [
     "play_shotgun", "play_pass_outcome", "play_yards_after_contact",
     "play_tackle_success", "play_handoff_received",
     "play_included_fake", "play_motion_type", "play_havoc",
+    "play_prob_field_goal", "play_prob_no_score", "play_prob_opp_field_goal",
+    "play_prob_opp_safety", "play_prob_opp_touchdown", "play_prob_safety",
+    "play_prob_touchdown", "play_ep", "play_scrimmage_epa",
+    "play_prob_made_field_goal", "play_fg_ep", "play_fg_epa",
+    "play_snap_locations",
+    "play_player_role_x", "play_player_role_y", "play_player_role_z",
+    "play_player_role_f", "play_player_role_h",
+    "play_start_video_timestamp_angle2", "play_end_video_timestamp_angle2",
+    "play_start_video_timestamp_angle3", "play_end_video_timestamp_angle3",
+    "play_video_info", "play_two_minute", "play_four_minute",
+    "play_defensive_coverage", "play_blitz_type", "play_blitz_players",
+    "play_blitz_jersey_numbers", "play_blitz_depth", "play_pass_rushers",
+    "play_pass_coverage_players", "play_defensive_front",
+    "play_defensive_front_players", "play_defensive_front_num_players",
+    "play_mofo", "play_zone_coverage_prob", "play_offensive_substitutions",
+    "play_defensive_substitutions", "play_incompletion_types",
+    "play_garbage_time", "play_offensive_players",
+    "play_offensive_skill_players", "play_defensive_players",
+    "play_pass_direction", "play_pass_width", "play_bunched_players",
+    "play_previous_play_uuid", "play_next_play_uuid", "play_run_gap_1yard",
+    "play_yards_run_from_los", "play_target_alignment_position_id",
+    "play_target_route", "gsis_play_id_db", "gsis_play_id_fix", "null_gsis",
     "play_yards_net",
 ]
 track_remove_colnames = [
@@ -150,25 +147,9 @@ track_remove_colnames = [
 
 frame_colnames = ["play_uuid", "frame_time", "frame_time_snap"]
 
-play_fill_colnames = [
-    "game_playoffs", "game_week", "game_season",
-    "play_quarter", "play_down", "play_snap_y", "play_time",
-    "play_snap_left", "play_snap_center", "play_snap_right",
-    "play_defense_drive", "play_defense_game",
-    "play_defense_is_home_team", "play_defense_in_lead", "play_defense_play",
-    "play_defense_timeouts",
-    "play_offense_drive", "play_offense_game",
-    "play_offense_is_home_team", "play_offense_in_lead", "play_offense_play",
-    "play_offense_timeouts",
-    "play_score_difference", "play_score_equal", "play_snap_x",
-    "play_time_before_snap", "play_time_after_snap",
-    "play_yards_gained", "play_yards_needed",
-]
-
 player_bool_flattened_colnames = [[
     f"player_defense-{n:02d}", f"player_offense-{n:02d}",
     f"player_position_na-{n:02d}",
-    f"player_position_pt-{n:02d}", f"player_position_ls-{n:02d}",
     f"player_position_qb-{n:02d}", f"player_position_rb-{n:02d}",
     f"player_position_wr-{n:02d}", f"player_position_te-{n:02d}",
     f"player_position_ol-{n:02d}", f"player_position_dl-{n:02d}",
@@ -183,7 +164,7 @@ player_float_flattened_colnames = [[
     f"player_dx-{n:02d}", f"player_dy-{n:02d}",
     f"player_vx-{n:02d}", f"player_vy-{n:02d}",
     f"player_ax-{n:02d}", f"player_ay-{n:02d}",
-    f"player_sep-{n:02d}", f"player_yabs-{n:02d}",
+    f"player_yabs-{n:02d}",
 ] for n in range(1, all_players + 1)]
 player_float_flattened_colnames = \
     [cc for c in player_float_flattened_colnames for cc in c]
@@ -201,6 +182,16 @@ player_location_colnames = [
 ]
 player_location_flattened_colnames = \
     [c for l in player_location_colnames for c in l]
+
+player_position_flattened_colnames = [
+    c for c in player_bool_flattened_colnames if "player_position_" in c]
+
+play_xrec_derived_colnames = [
+    "game_season", "play_down",
+    "play_quarter", "play_score_difference",
+    "play_snap_center", "play_snap_left", "play_snap_right",
+    "play_snap_x", "play_yards_needed",
+]
 
 player_uuid_colnames = [
     f"player_uuid-{n:02d}" for n in range(1, all_players + 1)
