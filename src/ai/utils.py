@@ -57,8 +57,8 @@ def collect_distributions(
 
     return dists
 
-def pad_second_dimension(t: torch.Tensor) -> torch.Tensor:
-    val = batch_size - t.size(1)
+def pad_second_dimension(t: torch.Tensor, n: int) -> torch.Tensor:
+    val = n - t.size(1)
     if val > 0:
         if len(t.shape) == 4:  tup = (0, 0, 0, 0, 0, val, 0, 0)
         elif len(t.shape) == 3:  tup = (0, 0, 0, val, 0, 0)
