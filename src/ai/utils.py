@@ -92,8 +92,8 @@ def accumulate_xy( # TODO null padded T
         dim=0
     )
 
-    t[..., 0] = (ts[1, :, 21] + tdd_x + ts[1, :, -6])
-    t[..., 1] = (ts[1, :, 22] + tdd_y + ts[1, :, -5])
+    t[..., 0] = (ts[1, :, 23] + tdd_x + ts[1, :, -5])
+    t[..., 1] = (ts[1, :, 24] + tdd_y + ts[1, :, -4])
 
     t[..., 0] *= x_field_max
     t[..., 1] *= np.abs(y_bnd)
@@ -104,18 +104,12 @@ def accumulate_xy( # TODO null padded T
         (tt[:, :team_players, 0], tt[:, team_players:, 0]),
         (tt[:, :team_players, 1], tt[:, team_players:, 1]),
         (
-            torch.round(ts[..., 21] * x_field_max, decimals=0)[1][1].item(),
+            torch.round(ts[..., 23] * x_field_max, decimals=0)[1][1].item(),
             torch.round(
-                (ts[..., 22] * np.abs(y_bnd)) + y_mid, decimals=3
+                (ts[..., 24] * np.abs(y_bnd)) + y_mid, decimals=3
             )[1][1].item()
         )
     )
-
-def get_trajectory_by_index(
-    t: torch.Tensor, batch_index: int, timestep: int
-) -> torch.Tensor:
-
-    return t[batch_index, timestep, :, ...]
 
 def load_models(
     uid: str, storage_device: torch.device
