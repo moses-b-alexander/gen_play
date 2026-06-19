@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import os
+
+os.environ["OMP_NUM_THREADS"] = "1"
+
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
 # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
 # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
@@ -86,8 +90,12 @@ df_u_f = df_u_f.copy()
 
 df_u_f = postprocess_df(
     df_u_f,
-    sn=+1, rs=1.0, ci=[0, ], mw=180, dr=1,
-    max_score_diff=0.21, snap_x_range=(0.20, 0.80), cut_2min=True,
+    ci=catg_idxs,
+    mw=max_window, dr=downsample_rate,
+    ad=km_alpha_decay, nc=km_num_clusters,
+    sn=reward_sign, rs=reward_scale, rb=reward_beta,
+    msd=max_score_diff, sxr=snap_x_range, ctm=cut_two_min,
+    add_xrec=False, skip_reward=False
 )
 df_u_f = df_u_f.copy()
 
@@ -169,8 +177,10 @@ pb_hps = dict(
 config_hps = {
     "dtype": str(dtyp),
     "seasons": season_count, "matches": match_count,
-    "reward_threshold": reward_threshold, "reward_scale": reward_scale,
-    "reward_sign": reward_sign,
+    "reward_threshold": reward_threshold,
+    "reward_sign": -1 if not reward_sign else +1,
+    "reward_scale": reward_scale, "reward_beta": reward_beta,
+    "kmeans_decay": km_alpha_decay, "kmeans_clusters": km_num_clusters,
     "split": train_ratio,
     "lr": learning_rate, "wd": weight_decay_rate,
     "trajectories": num_plays,
@@ -178,17 +188,22 @@ config_hps = {
     "fps": downsample_rate, "window": max_window, "timesteps": num_timesteps,
     "players": shape_players,
     "input_dim": state_dim, "hidden_dim": final_dim, "output_dim": action_dim,
-    "dx_threshold": max_dx, "dy_threshold": max_dy,
+    "dx_threshold": (max_dx / downsample_rate) * x_field_max,
+    "dy_threshold": (max_dy / downsample_rate) * abs(y_bnd),
+    "max_score": max_score_diff,
+    "snap_low": snap_x_range[0], "snap_high": snap_x_range[1],
+    "cut_twomin": cut_two_min,
     "screen": screen_mode, "color": "#999999",
-    "name": model_name,
+    "type": [play_catgs[ci] for ci in catg_idxs],
+    "model_name": model_name,
 }
 
 print(s_str)
 run_id = ""
 
 # retsu0, run_id = train_bagged_model(
-#     bag_ct=1, ratio=0.999,
-#     # bag_ct=4, ratio=0.900,
+#     # bag_ct=1, ratio=0.999,
+#     bag_ct=4, ratio=0.900,
 #     # bag_ct=1024, ratio=0.001,
 #     df_m=df_u_f_train,
 #     pf_cls=PF, pf_args=pf_hps,
@@ -199,8 +214,9 @@ run_id = ""
 #     cfg_dict=config_hps,
 #     runner_device=learning_device
 # )
+# print(asdf)
 
-if not run_id:  run_id = "7ac272e9d13a495fa201040a5f9162e6"
+if not run_id:  run_id = "b33b6a7b5d3243548839dccaff82816d"
 
 retsu0 = []
 for r in load_models(run_id, learning_device):
@@ -225,11 +241,8 @@ gend = [
 ]
 
 ips = list(range(num_eval_traj))
-for ip in ips[::2]:
-    a00, s00 = plot_play_2(
-        None, orig[ip], gend[ip], num_timesteps, 1,
-        show_def_to_off=True, show_off_to_def=False
-    )
+for ip in ips[::len(ips)//3]:
+    a00, s00 = plot_play_2(None, orig[ip], gend[ip], num_timesteps, 1)
     plt.show()
     plt.close("all")
 

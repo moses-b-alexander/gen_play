@@ -2,4 +2,6 @@
 # from * import *
 
 
-# TODO hyperparameter tuning
+# TODO develop streamlit frontend
+
+# TODO agentic hyperparameter tuning
