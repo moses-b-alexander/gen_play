@@ -48,22 +48,31 @@ from __future__ import annotations
 import json
 import multiprocessing as mp
 import os
+from pathlib import Path
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from copy import deepcopy
 from time import perf_counter
+
+# Pin CWD to the repo root before anything below is imported --
+# common/dirs.py resolves processed_*/, output/, etc. off os.getcwd(), so
+# this has to happen before `from common.dirs import processed_dir` (and
+# ai.train's own internal import of it) further down. Works whether this is
+# run as `python src/hp_search.py` from the repo root or `python
+# hp_search.py` from inside src/. multiprocessing's spawned workers inherit
+# this process's CWD, so _trial_worker subprocesses pick it up too.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+os.chdir(PROJECT_ROOT)
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 import anthropic
 import numpy as np
 import pandas as pd
 import torch
 
-from ai.constants import (
-    action_dim,
-    downsampling,
-    shape_players,
-    state_dim,
-)
+from ai.constants import action_dim, state_dim
 from ai.hyperparameters import (
     get_decoder_hyperparameters,
     get_encoder_hyperparameters,
@@ -73,8 +82,21 @@ from ai.train import train_bagged_model
 from common.constants import dtyp
 from common.devices import learning_device
 from common.dirs import processed_dir
-from data.constants import max_window, reward_sign, x_field_max
-from data.processing import postprocess_df, split_df
+from data.constants import (
+    max_deltas, max_window, reward_sign, shape_players, x_field_max,
+)
+from data.processing import postprocess_df, set_reward, split_df
+from run_config import DEFAULTS as _RC_DEFAULTS, FIXED_PRIOR_MEANS, FIXED_PRIOR_STDVS
+
+# Fixed (not searched) values, sourced from run_config so this file can't
+# silently drift from the dashboard/main.py defaults again.
+_FIXED_WDR = float(_RC_DEFAULTS["weight_decay_rate"])
+_FIXED_DECODER_MIN_STDV = float(_RC_DEFAULTS["decoder_min_stdv"])
+_FIXED_DECODER_MAX_STDV = float(_RC_DEFAULTS["decoder_max_stdv"])
+_FIXED_NOISE_FLOOR = float(_RC_DEFAULTS["noise_floor"])
+_FIXED_NOISE_CEILING = float(_RC_DEFAULTS["noise_ceiling"])
+_FIXED_NOISE_DECAY = float(_RC_DEFAULTS["noise_decay"])
+_FIXED_NOISE_EXP = float(_RC_DEFAULTS["noise_exp"])
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +159,7 @@ _HP_PROPS: dict = {
     "drift_size": {
         "type": "integer",
         "description": "Depth of the SDE drift network.",
-        "enum": [1, 2, 3, 4],
+        "enum": [2, 3, 4],
     },
     "diffusion_size": {
         "type": "integer",
@@ -157,23 +179,32 @@ _HP_PROPS: dict = {
         "description": "Euler integration steps for the SDE.",
         "enum": [2, 4, 6, 8],
     },
-    "sde_scale": {
-        "type": "number",
-        "description": "Initial noise scale for the SDE.",
-        "enum": [0.01, 0.1, 1.0],
+    "batch_size": {
+        "type": "integer",
+        "description": "Number of trajectories per training batch.",
+        "enum": [4, 8, 16, 32],
     },
     "learning_rate": {
         "type": "number",
         "description": "AdamW learning rate.",
         "enum": [3e-5, 1e-4, 3e-4, 1e-3],
     },
-    "batch_size": {
+    "num_epochs": {
         "type": "integer",
+        "description": "Number of passes over the training set.",
+        "enum": [1, 2, 3, 5],
+    },
+    "reward_scale": {
+        "type": "number",
         "description": (
-            "Training batch size"
-            " (trajectories per step)."
+            "Multiplier on the sigmoid reward"
+            " r(yg) = scale * sigmoid(yg)."
+            " Acts as inverse temperature:"
+            " higher values sharpen the reward"
+            " signal toward high-yardage plays."
+            " Default 1.0."
         ),
-        "enum": [4, 8, 16],
+        "enum": [0.5, 1.0, 2.0, 5.0],
     },
     "rationale": {
         "type": "string",
@@ -284,20 +315,22 @@ def _build_pf_hps(
         dim_middle=hps["diff_eq_dim_middle"],
         steps=hps["sde_steps"],
         rtol=1e-5, atol=1e-5,
-        scale=hps["sde_scale"],
         dt=1e-2,
     )
     decoder_hps = (
-        get_decoder_hyperparameters(min_s=1e-5, max_s=1e-2)
+        get_decoder_hyperparameters(
+            min_s=_FIXED_DECODER_MIN_STDV, max_s=_FIXED_DECODER_MAX_STDV
+        )
+        | dict(max_deltas=max_deltas)
         | input_hps
     )
     output_hps = dict(
-        noise_floor=1e-6,
-        noise_ceiling=1e-1,
-        noise_gap=10,
-        noise_exp=1.0,
-        prior_means=((0.0, 0.0), (0.0, 0.0)),
-        prior_stdvs=((1e-3, 1e-3), (1e-3, 1e-3)),
+        noise_floor=_FIXED_NOISE_FLOOR,
+        noise_ceiling=_FIXED_NOISE_CEILING,
+        noise_decay=_FIXED_NOISE_DECAY,
+        noise_exp=_FIXED_NOISE_EXP,
+        prior_means=FIXED_PRIOR_MEANS,
+        prior_stdvs=FIXED_PRIOR_STDVS,
         device=learning_device,
     )
     shared = dict(dim_h=hps["final_dim"], pow_iters=1)
@@ -336,16 +369,17 @@ def _validate_hps(hps: dict) -> dict:
 
 def run_trial(
     hps: dict,
-    df_train: pd.DataFrame,
+    df_base: pd.DataFrame,
     num_timesteps: int,
 ) -> dict:
     """Train one bag and return metrics."""
     hps = _validate_hps(hps)
+    rs = hps.pop("reward_scale", 1.0)
+    bs = hps.pop("batch_size")
+    ne = hps.pop("num_epochs")
+    df_train = set_reward(df_base, rs=rs)
     pf_hps, pb_hps = _build_pf_hps(hps, num_timesteps)
-
-    import ai.constants as _ac
-    _orig_bs = _ac.batch_size
-    _ac.batch_size = hps["batch_size"]
+    opt_args = dict(bs=bs, lr=hps["learning_rate"], wdr=_FIXED_WDR, ne=ne)
 
     t0 = perf_counter()
     rets, _ = train_bagged_model(
@@ -353,11 +387,11 @@ def run_trial(
         df_m=df_train,
         pf_cls=PF, pf_args=pf_hps,
         pb_cls=PF, pb_args=pb_hps,
+        opt_args=opt_args,
         random=True,
         write_model=False,
         runner_device=learning_device,
     )
-    _ac.batch_size = _orig_bs
 
     log_z = float(rets[0][0])
     return {
@@ -380,7 +414,7 @@ def _trial_worker(args: tuple) -> dict:
         gpu_id, hps, parquet_paths,
         proc_params, num_timesteps, syspath,
     )
-    proc_params = (reward_sign, ci, max_window, downsampling)
+    proc_params = (reward_sign, ci, max_window)
     """
     (
         gpu_id, hps, parquet_paths,
@@ -396,19 +430,7 @@ def _trial_worker(args: tuple) -> dict:
     import pandas as pd
     import numpy as np
     import torch
-    from copy import deepcopy
-    from time import perf_counter
 
-    import ai.constants as _ac
-    from ai.constants import (
-        action_dim,
-        shape_players,
-        state_dim,
-    )
-    from ai.hyperparameters import (
-        get_decoder_hyperparameters,
-        get_encoder_hyperparameters,
-    )
     from ai.pf import PF
     from ai.train import train_bagged_model
     from common.constants import dtyp
@@ -418,90 +440,37 @@ def _trial_worker(args: tuple) -> dict:
 
     torch.serialization.add_safe_globals([dtyp])
 
-    sn, ci, mw, dr = proc_params
+    sn, ci, mw = proc_params
+    rs = hps.pop("reward_scale", 1.0)
     dfs = [pd.read_parquet(p).copy() for p in parquet_paths]
     df = pd.concat(dfs, axis=0, ignore_index=False).copy()
-    df = postprocess_df(df, sn=sn, ci=ci, mw=mw, dr=dr).copy()
+    df = postprocess_df(df, sn=sn, ci=ci, mw=mw, rs=rs).copy()
 
     num_ts = (
         num_timesteps
-        or max(df.index.get_level_values(1).tolist())
+        or int(df.index.get_level_values(1).max())
     )
     train_ids, _ = split_df(df_w=df, ratio=0.9, random=False)
     mask = df.index.get_level_values(0).isin(train_ids)
     df_train = df.loc[mask].copy()
 
-    hps = deepcopy(hps)
-    if hps["dim_player"] % hps["num_heads"] != 0:
-        for h in [8, 4, 2]:
-            if hps["dim_player"] % h == 0:
-                hps["num_heads"] = h
-                break
-    if hps["diff_eq_dim_middle"] > hps["final_dim"]:
-        hps["diff_eq_dim_middle"] = hps["final_dim"]
+    hps = _validate_hps(hps)
+    bs = hps.pop("batch_size")
+    ne = hps.pop("num_epochs")
+    pf_hps, pb_hps = _build_pf_hps(hps, num_ts)
+    opt_args = dict(bs=bs, lr=hps["learning_rate"], wdr=_FIXED_WDR, ne=ne)
 
-    input_hps = dict(
-        player_count=(shape_players // 2),
-        trajectory_length=num_ts,
-    )
-    encoder_hps = get_encoder_hyperparameters(
-        lags=([0, 15], [15, 30]),
-        dim_play=hps["dim_play"],
-        dim_player=hps["dim_player"],
-        num_heads=hps["num_heads"],
-        dropout=hps["dropout"],
-        expansion=hps["expansion"],
-    ) | input_hps
-    diff_eq_hps = dict(
-        drift_size=hps["drift_size"],
-        diffusion_size=hps["diffusion_size"],
-        dim_middle=hps["diff_eq_dim_middle"],
-        steps=hps["sde_steps"],
-        rtol=1e-5, atol=1e-5,
-        scale=hps["sde_scale"],
-        dt=1e-2,
-    )
-    decoder_hps = (
-        get_decoder_hyperparameters(min_s=1e-5, max_s=1e-2)
-        | input_hps
-    )
-    output_hps = dict(
-        noise_floor=1e-6,
-        noise_ceiling=1e-1,
-        noise_gap=10,
-        noise_exp=1.0,
-        prior_means=((0.0, 0.0), (0.0, 0.0)),
-        prior_stdvs=((1e-3, 1e-3), (1e-3, 1e-3)),
-        device=learning_device,
-    )
-    shared = dict(dim_h=hps["final_dim"], pow_iters=1)
-    base = dict(
-        dim_start=state_dim,
-        dim_hidden=shared["dim_h"],
-        dim_end=action_dim,
-        pow_iters=shared["pow_iters"],
-        encoder_hps=encoder_hps,
-        diff_eq_hps=diff_eq_hps,
-        decoder_hps=decoder_hps,
-        **output_hps,
-        **input_hps,
-    )
-    pf_hps = dict(backwards=False, **base)
-    pb_hps = dict(backwards=True, **base)
-
-    _orig_bs = _ac.batch_size
-    _ac.batch_size = hps["batch_size"]
     t0 = perf_counter()
     rets, _ = train_bagged_model(
         bag_ct=1, ratio=0.9,
         df_m=df_train,
         pf_cls=PF, pf_args=pf_hps,
         pb_cls=PF, pb_args=pb_hps,
+        opt_args=opt_args,
         random=True,
         write_model=False,
         runner_device=learning_device,
     )
-    _ac.batch_size = _orig_bs
 
     log_z = float(rets[0][0])
     return {
@@ -586,17 +555,26 @@ SYSTEM_PROMPT = (
     "  diff_eq_dim_middle: hidden width"
     " (keep <= final_dim).\n"
     "  sde_steps: Euler steps (4 is usually fine).\n"
-    "  sde_scale: noise magnitude (0.1 is robust).\n"
     "- Shared: final_dim is the bottleneck"
     " for SDE and decoder.\n"
-    "- Optimiser: AdamW;"
-    " lr and batch_size strongly affect convergence.\n\n"
+    "- Optimiser: AdamW; lr strongly affects convergence.\n"
+    "  batch_size: trajectories per step. Smaller -> noisier"
+    " gradients but more steps/epoch; larger -> smoother"
+    " but slower per-epoch coverage.\n"
+    "  num_epochs: passes over the training set. More epochs"
+    " directly multiply trial wall-clock time, so weigh"
+    " this against the trial time budget.\n"
+    "- Reward: r(yg) = reward_scale * sigmoid(yg),"
+    " yg normalised to [-1, +1]."
+    " reward_scale acts as inverse temperature:"
+    " higher -> sharper focus on high-yardage plays.\n\n"
     "STRATEGY\n"
     "1. Baseline: dim_play=128, dim_player=128,"
     " num_heads=4, dropout=0.10, expansion=2,\n"
     "   final_dim=64, drift=2, diffusion=2,"
-    " dim_middle=32, sde_steps=4, sde_scale=0.1,\n"
-    "   lr=1e-4, batch=8.\n"
+    " dim_middle=32, sde_steps=4,\n"
+    "   lr=1e-4, batch_size=8, num_epochs=1,"
+    " reward_scale=1.0.\n"
     "2. Vary 1-2 axes per trial to isolate effects.\n"
     "3. Focus on dimensions that matter most.\n"
     "4. Constraints (silently fixed):\n"
@@ -613,7 +591,7 @@ SYSTEM_PROMPT = (
 # ---------------------------------------------------------------------------
 
 def agentic_hp_search(
-    df_train: pd.DataFrame,
+    df_base: pd.DataFrame,
     num_timesteps: int,
     parquet_paths: list[str] | None = None,
     proc_params: tuple | None = None,
@@ -626,12 +604,13 @@ def agentic_hp_search(
 
     Parameters
     ----------
-    df_train      : pre-processed training DataFrame
+    df_base       : training DataFrame pre-processed but
+                    WITHOUT set_reward applied; each trial
+                    applies its own reward_scale HP
     num_timesteps : max timestep index from the dataset
     parquet_paths : parquet paths for parallel workers
                     (required when n_parallel > 1)
-    proc_params   : (reward_sign, ci, max_window,
-                    downsampling) for workers
+    proc_params   : (reward_sign, ci, max_window) for workers
     n_trials      : total number of evaluations
     n_parallel    : 1=sequential; k>1=k-GPU batched
     claude_model  : Anthropic model ID
@@ -750,7 +729,7 @@ def agentic_hp_search(
                     end="",
                     flush=True,
                 )
-                m = run_trial(hp, df_train, num_timesteps)
+                m = run_trial(hp, df_base, num_timesteps)
                 metrics_list.append(m)
                 lz = m["log_z"]
                 ya = m["yards_approx"]
@@ -847,63 +826,6 @@ def agentic_hp_search(
 
 
 # ---------------------------------------------------------------------------
-# Optional trajectory-level filters
-# ---------------------------------------------------------------------------
-
-def slice_df(
-    df: pd.DataFrame,
-    max_score_diff: float | None = 0.14,
-    max_down: float | None = 0.50,
-    snap_x_range: tuple[float, float] | None = (0.20, 0.80),
-    max_quarter: float | None = None,
-) -> pd.DataFrame:
-    """
-    Filter trajectories by play-level conditions. Operates
-    at trajectory granularity — either the whole play is
-    kept or dropped.
-
-    Parameters are in the same normalised units as the df:
-      max_score_diff : off_score - def_score / 100
-                       (0.14 = within 14 points)
-      max_down       : play_down / 4
-                       (0.50 = 1st or 2nd down only)
-      snap_x_range   : (lo, hi) for play_snap_x in [0,1]
-                       (0.20-0.80 = non-red-zone,
-                        non-own-endzone)
-      max_quarter    : play_quarter / 4
-                       (0.75 = Q1-Q3 only)
-
-    Reads play context from frame index 2 (first real
-    frame after the start sentinel), where play-level
-    features hold their true values.
-    """
-    frame2 = df.loc[df.index.get_level_values(1) == 2]
-
-    mask = pd.Series(True, index=frame2.index)
-
-    if max_score_diff is not None:
-        mask &= (
-            frame2["play_score_difference"].abs()
-            <= max_score_diff
-        )
-    if max_down is not None:
-        mask &= frame2["play_down"] <= max_down
-    if snap_x_range is not None:
-        lo, hi = snap_x_range
-        mask &= (
-            (frame2["play_snap_x"] >= lo) &
-            (frame2["play_snap_x"] <= hi)
-        )
-    if max_quarter is not None:
-        mask &= frame2["play_quarter"] <= max_quarter
-
-    valid_ids = frame2.loc[mask].index.get_level_values(0)
-    return df.loc[
-        df.index.get_level_values(0).isin(valid_ids)
-    ].copy()
-
-
-# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -928,18 +850,16 @@ def _load_seasons(
         sn=reward_sign,
         ci=[0],
         mw=max_window,
-        dr=downsampling,
+        skip_reward=True,
     ).copy()
 
-    num_timesteps = max(
-        df_all.index.get_level_values(1).tolist()
-    )
+    num_timesteps = int(df_all.index.get_level_values(1).max())
     train_ids, _ = split_df(
         df_w=df_all, ratio=0.9, random=False
     )
     mask = df_all.index.get_level_values(0).isin(train_ids)
-    df_train = df_all.loc[mask].copy()
-    return df_train, num_timesteps, paths
+    df_base = df_all.loc[mask].copy()
+    return df_base, num_timesteps, paths
 
 
 if __name__ == "__main__":
@@ -998,21 +918,21 @@ if __name__ == "__main__":
     torch.cuda.empty_cache()
     torch.serialization.add_safe_globals([dtyp])
 
-    df_train, num_timesteps, parquet_paths = (
+    df_base, num_timesteps, parquet_paths = (
         _load_seasons(search_seasons)
     )
     n_plays = len(
-        set(df_train.index.get_level_values(0).tolist())
+        set(df_base.index.get_level_values(0).tolist())
     )
     print(
         f"Training trajectories: {n_plays}"
         f"  timesteps: {num_timesteps}"
     )
 
-    proc_params = (reward_sign, [0], max_window, downsampling)
+    proc_params = (reward_sign, [0], max_window)
 
     best, history = agentic_hp_search(
-        df_train=df_train,
+        df_base=df_base,
         num_timesteps=num_timesteps,
         parquet_paths=(
             parquet_paths if args.n_parallel > 1 else None

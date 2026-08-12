@@ -1,7 +1,7 @@
 
 import torch
 import torch.nn as nn
-import torchsde
+import torchsde # pyright: ignore[reportMissingImports]
 
 from ai.dynamics import Dynamics
 
@@ -13,7 +13,6 @@ class DiffEq(nn.Module):
         dim_embedding: int, dim_middle: int,
         steps: int,
         rtol: float, atol: float,
-        scale: float,
         dt: float,
         backwards: bool
     ) -> None:
@@ -24,12 +23,13 @@ class DiffEq(nn.Module):
         self.dynamics = Dynamics(
             drift_size=drift_size, diffusion_size=diffusion_size,
             dim_embedding=dim_embedding, dim_middle=dim_middle,
-            scale=scale, backwards=self.backwards
+            backwards=self.backwards
         )
 
-        self.steps = steps
-        self.rtol, self.atol = rtol, atol
-        self.dt = dt
+        self.steps = steps if steps > 1 and isinstance(steps, int) else 2
+        self.rtol = rtol if rtol < 0 and isinstance(rtol, float) else 1e-5
+        self.atol = atol if atol < 0 and isinstance(atol, float) else 1e-8
+        self.dt = dt if dt > 0 and dt < 1 else 1e-1
 
         self.dim_embedding = dim_embedding
 

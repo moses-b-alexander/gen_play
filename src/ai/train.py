@@ -9,9 +9,7 @@ from torch.utils.data import DataLoader
 from typing import Type
 from uuid import uuid4
 
-from ai.constants import (
-    action_dim, batch_size, state_dim, learning_rate, weight_decay_rate
-)
+from ai.constants import action_dim, state_dim
 from ai.utils import seed_worker
 from common.constants import dtyp, s_char, s_str, seed
 from common.devices import learning_device
@@ -28,6 +26,7 @@ from gflownet.estimators import Estimator
 def initialize_model(
     env: PlayEnv,
     fwd_model: Estimator, bwd_model: Estimator,
+    learning_rate: float, weight_decay_rate: float,
     model_device: torch.device
 ) -> tuple[GFlowNet, Estimator, Estimator, torch.optim.Optimizer]:
 
@@ -73,6 +72,9 @@ def train_model(
     env: PlayEnv,
     p_f: Estimator, p_b: Estimator | None,
     optm: torch.optim.Optimizer | None,
+    bs: int,
+    lr: float, wdr: float,
+    ne: int,
     idxs: int | list[int] | None,
     write_loss: int,
     random: bool,
@@ -83,13 +85,16 @@ def train_model(
     dataset = OfflineTrajectoryDataset(ctrs)
 
     gfn, pf, pb, opt = initialize_model(
-        env=env, fwd_model=p_f, bwd_model=p_b, model_device=training_device)
+        env=env, fwd_model=p_f, bwd_model=p_b,
+        learning_rate=lr, weight_decay_rate=wdr,
+        model_device=training_device
+    )
     if optm is not None:  opt = optm
 
     if random:
         loader = DataLoader(
             dataset,
-            batch_size=batch_size, shuffle=False,
+            batch_size=bs, shuffle=False,
             pin_memory=False, drop_last=True,
             worker_init_fn=None, generator=None
         )
@@ -98,24 +103,33 @@ def train_model(
         gen.manual_seed(seed)
         loader = DataLoader(
             dataset,
-            batch_size=batch_size, shuffle=True,
+            batch_size=bs, shuffle=True,
             pin_memory=False, drop_last=True,
             worker_init_fn=seed_worker, generator=gen
         )
 
-    for step, batch in enumerate(loader):
-        cur = step + 1
-        if cur > ((2 ** 31) - 2):  break
+    cur = 0
+    for epoch in range(ne):
+        for batch in loader:
+            cur += 1
+            if cur > ((2 ** 31) - 2):  break
 
-        gfn, opt, lossv = training_step(
-            env=env, batch=batch,
-            gfnet=gfn, opt=opt,
-            step_num=cur,
-            step_device=training_device
-        )
+            gfn, opt, lossv = training_step(
+                env=env, batch=batch,
+                gfnet=gfn, opt=opt,
+                step_num=cur,
+                step_device=training_device
+            )
 
-        if write_loss > 0 and cur % write_loss == 0:
-            print(s_str, f"Step {cur:04d} Loss: {lossv:.3f}", s_str)
+            if write_loss > 0 and cur % write_loss == 0:
+                print(
+                    s_str,
+                    f"Epoch {epoch + 1:03d} Step {cur:04d} Loss: {lossv:.3f}",
+                    s_str
+                )
+        else:
+            continue
+        break
 
     if return_aux:  return (env.log_z, gfn.pf, gfn.pb, opt)
     else:  return (env.log_z, gfn.pf)
@@ -125,6 +139,7 @@ def train_bagged_model(
     df_m: pd.DataFrame,
     pf_cls: Type[Estimator], pb_cls: Type[Estimator],
     pf_args: dict, pb_args: dict,
+    opt_args: dict,
     ratio: float=1.000,
     random: bool=False,
     write_model: bool=False,
@@ -136,6 +151,20 @@ def train_bagged_model(
 
     if ratio == 0.999:  ratio = 1.000 # for convenience
     if ratio == 0.000:  ratio = 0.001 # just in case
+
+    ct = len(sorted(list(set(list(pd.factorize(
+        df_m.index.get_level_values(0)
+    )[1]))))) * ratio
+
+    pf_args |= {"noise_gap": int(
+        pf_args["noise_decay"] * ct * opt_args["ne"] // opt_args["bs"]
+    )}
+    pf_args.pop("noise_decay")
+    if pb_cls is not None:
+        pb_args |= {"noise_gap": int(
+            pb_args["noise_decay"] * ct * opt_args["ne"] // opt_args["bs"]
+        )}
+        pb_args.pop("noise_decay")
 
     for i in range(bag_ct):
         ids_train, _ = split_df(df_w=df_m, ratio=ratio, random=random)
@@ -153,6 +182,9 @@ def train_bagged_model(
             env=env_train,
             p_f=models[0], p_b=models[1],
             optm=None,
+            bs=opt_args["bs"],
+            lr=opt_args["lr"], wdr=opt_args["wdr"],
+            ne=opt_args["ne"],
             idxs=None,
             write_loss=2,
             random=random,
@@ -174,7 +206,7 @@ def train_bagged_model(
             )
             print(
                 (s_str[:-1] * 2).replace(s_char, "*"), "\n",
-                f"Total Yards in Dataset for {uid}_{i+1}:: ",
+                f"Total Yards for {uid}_{i+1}# ",
                 np.round((np.exp(mt[0]) * x_field_max), 3),
                 (s_str[:-1] * 2).replace(s_char, "*"), "\n",
             )

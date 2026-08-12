@@ -2,9 +2,7 @@
 import torch
 import torch.nn as nn
 
-from ai.constants import (
-    action_dim, max_deltas
-)
+from ai.constants import action_dim
 from ai.custom_linear import LLinear
 from data.constants import shape_players
 
@@ -16,6 +14,7 @@ class Decoder(nn.Module):
         trajectory_length: int,
         dim_input: int,
         min_stdv: float, max_stdv: float,
+        max_deltas: list[float],
         pow_iters: int,
         backwards: bool
     ) -> None:
@@ -33,7 +32,7 @@ class Decoder(nn.Module):
         self.register_buffer("max_delta", torch.tensor(max_deltas))
 
         std_init = 0.00
-        assert max_stdv > min_stdv and max_stdv <= 1e-2 and min_stdv >= 1e-6
+        assert max_stdv > min_stdv and max_stdv < 1e-1 and min_stdv > 1e-6
         self.min_stdv = min_stdv
         self.max_stdv = max_stdv
 

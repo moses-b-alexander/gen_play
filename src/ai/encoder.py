@@ -4,9 +4,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 
 from ai.attender import Attender
-from ai.constants import (
-    agent_dim, global_dim, max_deltas, player_tensor_indices
-)
+from ai.constants import agent_dim, global_dim, player_tensor_indices
 from ai.custom_linear import LLinear
 from ai.index_encoder import IndexEncoder
 from ai.mlp_encoder import MLPEncoder
@@ -14,7 +12,7 @@ from ai.normalizer import Normalizer
 from ai.play_encoder import PlayEncoder
 from ai.player_normalizer import PlayerNormalizer
 from ai.timestep_encoder import TimestepEncoder
-from data.constants import shape_players
+from data.constants import max_deltas, shape_players
 
 
 class Encoder(nn.Module):
@@ -99,7 +97,7 @@ class Encoder(nn.Module):
         for i in range(len(lags)):
             assert isinstance(lags[i], list)
             for lag in lags[i]:
-                if lag < (self.trajectory_length - 2) - 1 and lag >= 0:
+                if lag < (self.trajectory_length - 2) - 1 and lag > 0:
                     if len(lags) == 1:
                         for ki in lags_k:  lags_0[ki].append(lag)
                     elif len(lags) == 2 and i == 0:
@@ -118,7 +116,7 @@ class Encoder(nn.Module):
             key=lambda f: int(f[len("xxf_xx_"):])
         )
 
-        self.include_idx = True
+        self.include_idx = False
 
         self.play_enc = PlayEncoder(
             num_mlps=num_mlps_play,

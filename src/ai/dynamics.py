@@ -2,7 +2,7 @@
 from math import sqrt
 import torch
 import torch.nn as nn
-import torchsde
+import torchsde # pyright: ignore[reportMissingImports]
 
 
 class Dynamics(torchsde.SDEIto):
@@ -10,7 +10,6 @@ class Dynamics(torchsde.SDEIto):
         self,
         drift_size: int, diffusion_size: int,
         dim_embedding: int, dim_middle: int,
-        scale: float,
         backwards: bool
     ) -> None:
         super().__init__(noise_type="diagonal")
@@ -19,8 +18,7 @@ class Dynamics(torchsde.SDEIto):
 
         self.drift_size = drift_size if drift_size in [2, 3, 4] else 2
         self.diffusion_size = \
-            diffusion_size if diffusion_size in list(range(6)) else 0
-        self.scale = 1e-3 if scale < 1e-5 or scale > 1e-1 else scale
+            diffusion_size if diffusion_size in list(range(7)) else 0
 
         f0 = nn.Linear(dim_embedding, dim_middle)
         fm = [nn.Linear(dim_middle, dim_middle)
@@ -60,7 +58,7 @@ class Dynamics(torchsde.SDEIto):
         drift = nn.functional.gelu(self.f_linears[0](h))
         for layer in self.f_linears[1:-1]:
             drift = nn.functional.gelu(layer(drift))
-        drift = torch.tanh((0.50 * self.f_linears[-1](drift))) * 0.50
+        drift = torch.tanh(self.f_linears[-1](drift))
 
         return drift
 
@@ -69,24 +67,10 @@ class Dynamics(torchsde.SDEIto):
 
         if self.diffusion_size == 0:
             diffusion = torch.zeros_like(h)
-        elif self.diffusion_size == 1:
-            diffusion = torch.full_like(h, fill_value=self.scale)
         else:
             diffusion = nn.functional.gelu(self.g_linears[0](h))
             for layer in self.g_linears[1:-1]:
                 diffusion = nn.functional.gelu(layer(diffusion))
             diffusion = torch.tanh(self.g_linears[-1](diffusion))
 
-        diffusion_fwd = torch.tensor((0 + t.item()) * sqrt(self.scale))
-        diffusion_bwd = torch.tensor((1 - t.item()) * sqrt(self.scale))
-        diffusion_sch = diffusion_fwd
-        # diffusion_sch = diffusion_fwd if not self.backwards else diffusion_bwd
-        # diffusion_sch = diffusion_fwd if self.backwards else diffusion_bwd
-        # diffusion_sch = diffusion_bwd
-        noise_scale = self.scale + torch.sigmoid(diffusion_sch).item()
-
-        if noise_scale >= 1.00:  noise_scale = 1.00
-        if noise_scale <= -1.00:  noise_scale = -1.00
-        diffusion_scaled = noise_scale * diffusion
-
-        return diffusion_scaled
+        return diffusion

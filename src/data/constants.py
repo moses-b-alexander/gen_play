@@ -25,6 +25,9 @@ catg_idxs = [0, ]
 max_window = 180
 downsampling = 1
 
+max_deltas = [0.02, 0.01]
+max_dx, max_dy = max_deltas[0], max_deltas[1]
+
 km_alpha_decay = 0.15
 km_num_clusters = 16
 

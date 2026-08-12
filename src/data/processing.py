@@ -8,7 +8,6 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import xgboost as xgb # type: ignore
 
-from ai.constants import max_dx, max_dy
 from common.constants import (
     all_players, dtyp, fps, seed, team_players
 )
@@ -22,6 +21,7 @@ from data.columns import (
 from data.constants import (
     col_fillnas, col_types,
     fstv, game_time, km_alpha_decay, km_num_clusters, lstv,
+    max_dx, max_dy,
     num_drives, num_games,
     play_catgs, train_index, test_index,
     x_field_min, x_field_max,
@@ -1050,7 +1050,7 @@ def set_personnel(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def set_window(df: pd.DataFrame, window_len: int=0, downsample_rate: int=1):
+def set_window(df: pd.DataFrame, window_len: int=0):
     df = df.copy()
 
     num_t = int(df.index.get_level_values(1).max())
@@ -1072,56 +1072,6 @@ def set_window(df: pd.DataFrame, window_len: int=0, downsample_rate: int=1):
             (df.play_is_first != col_types["float"](1.0)) &
             (df.play_is_last != col_types["float"](1.0)), "play_true_length"
         ].clip(upper=(window_len + 1))
-
-    df = df.copy()
-
-    num_t = int(df.index.get_level_values(1).max())
-    downsample = fps // downsample_rate
-    if downsample >= 2 and downsample <= fps // 2:
-        ds_keys = [df.index.names[0], "ds"]
-
-        df["ds"] = ((df.index.get_level_values(1) - 1) // downsample) + 1
-        df.loc[df.index.get_level_values(1) == num_t, "ds"] = df.ds.max() + 1
-        dlt = df.groupby(ds_keys, sort=False)[action_flattened_colnames].sum()
-
-        fst = df.groupby(
-            "ds", group_keys=False, sort=False
-        ).apply(
-            lambda g: g.index.get_level_values(1).min(), include_groups=False
-        ).tolist()
-        df = df.loc[df.index.get_level_values(1).isin(fst),].copy()
-
-        jnd = df.join(dlt, on=ds_keys, rsuffix="__rr")
-        df[dlt.columns] = jnd[[(c + "__rr") for c in dlt.columns]].to_numpy()
-
-        df.index = pd.MultiIndex.from_arrays(
-            [df.index.get_level_values(0), df.ds], names=df.index.names)
-
-        df.loc[
-            (df.play_is_first != col_types["float"](1.0)) &
-            (df.play_is_last != col_types["float"](1.0)), "play_true_length"
-        ] = df.loc[
-            (df.play_is_first != col_types["float"](1.0)) &
-            (df.play_is_last != col_types["float"](1.0)), "play_true_length"
-        ].sub(1)
-
-        df.loc[
-            (df.play_is_first != col_types["float"](1.0)) &
-            (df.play_is_last != col_types["float"](1.0)), "play_true_length"
-        ] = df.loc[
-            (df.play_is_first != col_types["float"](1.0)) &
-            (df.play_is_last != col_types["float"](1.0)), "play_true_length"
-        ].floordiv(downsample)
-
-        df.loc[
-            (df.play_is_first != col_types["float"](1.0)) &
-            (df.play_is_last != col_types["float"](1.0)), "play_true_length"
-        ] = df.loc[
-            (df.play_is_first != col_types["float"](1.0)) &
-            (df.play_is_last != col_types["float"](1.0)), "play_true_length"
-        ].add(1)
-
-        df = df.drop(columns=["ds"])
 
     df = df.copy()
 
@@ -1267,7 +1217,7 @@ def slice_df(
 def postprocess_df(
     df: pd.DataFrame,
     ci: list[int],
-    mw: int, dr: int,
+    mw: int,
     ad: float, nc: int,
     sn: bool, rs: float, rb: float,
     msd: float, sxr: tuple[float, float], ctm: bool,
@@ -1283,7 +1233,7 @@ def postprocess_df(
 
     df = set_personnel(df)
 
-    df = set_window(df, window_len=mw, downsample_rate=dr)
+    df = set_window(df, window_len=mw)
 
     df = add_formation_feature(df, {"alpha_decay": ad, "num_clusters": nc})
 

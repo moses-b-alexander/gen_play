@@ -1,27 +1,8 @@
 
 import torch
 
-from common.constants import fps
-from data.constants import downsampling, x_field_max, y_bnd
-
 
 torch.backends.cudnn.deterministic = True
-
-train_ratio = 0.90
-
-learning_rate, weight_decay_rate = 1e-4, 1e-5
-
-batch_size = 8
-
-final_dim = 64
-
-downsample_rate = fps // downsampling
-if downsample_rate < 2 or downsample_rate > fps // 2:  downsample_rate = 1
-max_deltas = [
-    (4.000 / x_field_max) * downsample_rate,
-    (2.000 / abs(y_bnd)) * downsample_rate
-]
-max_dx, max_dy = max_deltas[0], max_deltas[1]
 
 global_dim, agent_dim = 28, 20
 state_dim = global_dim + agent_dim
