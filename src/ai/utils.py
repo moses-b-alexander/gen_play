@@ -1,5 +1,6 @@
 
 from math import sqrt
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import random
@@ -47,6 +48,95 @@ def sinusoidal_positional_encoding(
     pe[..., 1::2] = torch.cos(angles[..., 1::2])
 
     return pe
+
+def visualize_latent(
+    h: torch.Tensor, label: str="latent", max_cos_rows: int=200,
+    save_path: str | None=None,
+) -> dict:
+    eps = 1e-12
+    h = h.detach().reshape(-1, h.shape[-1])
+
+    var = h.var(dim=-1, unbiased=False)
+    mean_sq = h.mean(dim=-1) ** 2
+    rms = (var + mean_sq).sqrt()
+    direction_frac = var / (var + mean_sq + eps)
+
+    n = h.size(0)
+    if n > max_cos_rows:
+        idx = torch.randperm(n, device=h.device)[:max_cos_rows]
+        h_s = h[idx]
+    else:
+        h_s = h
+    h_norm = nn.functional.normalize(h_s, dim=-1, eps=eps)
+    cos = h_norm @ h_norm.T
+    mask = ~torch.eye(cos.size(0), dtype=torch.bool, device=cos.device)
+    off_diag_cos = cos[mask]
+
+    stats = dict(
+        rms=rms.cpu().numpy(),
+        var=var.cpu().numpy(),
+        mean_sq=mean_sq.cpu().numpy(),
+        direction_frac=direction_frac.cpu().numpy(),
+        cos_sim=off_diag_cos.cpu().numpy(),
+    )
+
+    print(
+        f"[{label}]  n={n}"
+        f"  rms median={np.median(stats['rms']):.4g}"
+        f"  direction_frac median={np.median(stats['direction_frac']):.4g}"
+        f"  (min={np.min(stats['direction_frac']):.4g})"
+        f"  cos_sim mean={np.mean(stats['cos_sim']):.4g}"
+        f"  (max={np.max(stats['cos_sim']):.4g})"
+    )
+
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.6), dpi=150)
+
+    axes[0].hist(stats["rms"], bins=40, color="#2a78d6")
+    axes[0].set_title("Per-row RMS")
+    axes[0].set_xlabel("sqrt(var + mean^2)")
+
+    axes[1].hist(stats["direction_frac"], bins=40, color="#1baf7a")
+    axes[1].set_title("Direction-dominance fraction")
+    axes[1].set_xlabel("var / (var + mean^2)")
+    axes[1].set_xlim(0, 1)
+
+    axes[2].hist(stats["cos_sim"], bins=40, color="#eb6834")
+    axes[2].set_title("Pairwise cosine similarity")
+    axes[2].set_xlabel("cosine similarity (subsampled, off-diagonal)")
+    axes[2].set_xlim(-1, 1)
+
+    fig.suptitle(label)
+    fig.tight_layout()
+
+    if save_path is None:
+        save_path = os.path.join(output_dir, f"z_diagnostics_{label}.png")
+    fig.savefig(save_path)
+    plt.close(fig)
+    print(f"saved: {os.path.abspath(save_path)}")
+
+    return stats
+
+def load_models(
+    uid: str, storage_device: torch.device
+) -> list[tuple[dtyp, dict]]:
+    l = []
+    if uid == "":  return []
+    udir = os.path.join(output_dir, uid)
+    if os.path.exists(udir) and os.path.isdir(udir):
+        wd = udir
+    else:
+        return []
+    sl = [f for f in os.listdir(wd)]
+    for s in sl:
+        ss = os.path.join(wd, s)
+        t = torch.load(ss, map_location=storage_device, weights_only=False)
+        log_z = dtyp(t["log_z"])
+        hps = t["hyperparameters"].copy()
+        cfg = t["config"].copy()
+        p_f = t["pf"].copy()
+        l.append((log_z, hps, cfg, p_f))
+
+    return l
 
 def collect_distributions(
     tups: list[tuple[dtyp, Estimator]], states: PlayStates
@@ -110,25 +200,3 @@ def accumulate_xy( # TODO null padded T
             )[1][1].item()
         )
     )
-
-def load_models(
-    uid: str, storage_device: torch.device
-) -> list[tuple[dtyp, dict]]:
-    l = []
-    if uid == "":  return []
-    udir = os.path.join(output_dir, uid)
-    if os.path.exists(udir) and os.path.isdir(udir):
-        wd = udir
-    else:
-        return []
-    sl = [f for f in os.listdir(wd)]
-    for s in sl:
-        ss = os.path.join(wd, s)
-        t = torch.load(ss, map_location=storage_device, weights_only=False)
-        log_z = dtyp(t["log_z"])
-        hps = t["hyperparameters"].copy()
-        cfg = t["config"].copy()
-        p_f = t["pf"].copy()
-        l.append((log_z, hps, cfg, p_f))
-
-    return l

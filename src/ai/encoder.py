@@ -806,7 +806,7 @@ class Encoder(nn.Module):
         zl = self.player_post_rnn_projs[k](zr1)
         zr2 = zl.reshape(L, NTB, -1)
         zt = (1.0 + (
-            torch.sigmoid(torch.tensor(self.tau_softmax)).item() *
+            torch.sigmoid(torch.tensor(self.tau_softmax)) *
             torch.sigmoid(self.player_softmax_scales[k])
         ))
         zv = zr2 / zt
@@ -829,10 +829,10 @@ class Encoder(nn.Module):
     def apply_global_conditioning(self, v, g, h, k):
         z_u = torch.sigmoid(self.conditioning_u[k](g))
         z_v = self.conditioning_v[k](v * z_u)
-        z_flr = torch.sigmoid((v.size(-1) / torch.linalg.norm(v))).item()
+        z_flr = torch.sigmoid((v.size(-1) / torch.linalg.norm(v)))
         z_flr *= 2.0
         z_tau = z_flr + (
-            (2.0 - z_flr) * torch.sigmoid(self.tau_conditioning).item()
+            (2.0 - z_flr) * torch.sigmoid(self.tau_conditioning)
         )
         z_w2 = self.conditioning_w2[k](torch.tanh(z_tau * z_v))
         z = v + h + z_w2

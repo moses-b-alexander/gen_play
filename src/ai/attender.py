@@ -83,7 +83,7 @@ class Attender(nn.Module):
         k_b = k_h.permute(1, 2, 0, 3).contiguous()
         v_b = v_h.permute(1, 2, 0, 3).contiguous()
 
-        tau_qk = torch.sigmoid(torch.tensor(self.tau)).item()
+        tau_qk = torch.sigmoid(torch.tensor(self.tau))
 
         tt_q = (
             tau_qk * torch.tanh(self.t_q).clamp_(min=-1.0, max=+1.0)

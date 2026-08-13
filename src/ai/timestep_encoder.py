@@ -27,7 +27,7 @@ class TimestepEncoder(nn.Module):
             max_len=self.trajectory_length,
             actual_lens=x,
             dim_out=self.dim_stp,
-            tau=torch.sigmoid(torch.tensor(self.tau_stp)).item(),
+            tau=torch.sigmoid(torch.tensor(self.tau_stp)),
             device=x.device
         )
 
