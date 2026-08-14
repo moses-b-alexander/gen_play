@@ -5,7 +5,7 @@ import torch.nn as nn
 import torchsde # pyright: ignore[reportMissingImports]
 
 
-class Dynamics(torchsde.SDEIto): # TODO incorporate T
+class Dynamics(torchsde.SDEIto):
     def __init__(
         self,
         drift_size: int, diffusion_size: int,
