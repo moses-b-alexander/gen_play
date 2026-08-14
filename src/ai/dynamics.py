@@ -5,7 +5,7 @@ import torch.nn as nn
 import torchsde # pyright: ignore[reportMissingImports]
 
 
-class Dynamics(torchsde.SDEIto):
+class Dynamics(torchsde.SDEIto): # TODO incorporate T
     def __init__(
         self,
         drift_size: int, diffusion_size: int,
@@ -53,8 +53,6 @@ class Dynamics(torchsde.SDEIto):
                 nn.ModuleList([nn.Linear(dim_embedding, dim_embedding)])
 
     def f(self, t: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
-        h = h
-
         drift = nn.functional.gelu(self.f_linears[0](h))
         for layer in self.f_linears[1:-1]:
             drift = nn.functional.gelu(layer(drift))
@@ -63,8 +61,6 @@ class Dynamics(torchsde.SDEIto):
         return drift
 
     def g(self, t: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
-        h = h
-
         if self.diffusion_size == 0:
             diffusion = torch.zeros_like(h)
         else:

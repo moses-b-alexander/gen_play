@@ -28,8 +28,8 @@ class DiffEq(nn.Module):
 
         self.steps = steps if steps > 1 and isinstance(steps, int) else 2
         self.rtol = rtol if rtol > 0 and isinstance(rtol, float) else 1e-5
-        self.atol = atol if atol > 0 and isinstance(atol, float) else 1e-8
-        self.dt = dt if dt > 0 and dt < 0.1 else 1e-2
+        self.atol = atol if atol > 0 and isinstance(atol, float) else 1e-4
+        self.dt = dt if dt >= 1e-12 and dt <= 1e-1 else 1e-2
 
         self.dim_embedding = dim_embedding
 
