@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from typing import Type
 from uuid import uuid4
+import wandb # pyright: ignore[reportMissingImports]
 
 from ai.constants import action_dim, state_dim
 from ai.utils import seed_worker
@@ -78,7 +79,8 @@ def train_model(
     idxs: int | list[int] | None,
     write_loss: int,
     random: bool,
-    training_device: torch.device
+    training_device: torch.device,
+    use_wandb: bool=False
 ) -> tuple[dtyp, nn.Module]:
     ctrs = subset_containers(env=env, idxs=idxs)
 
@@ -124,9 +126,11 @@ def train_model(
             if write_loss > 0 and cur % write_loss == 0:
                 print(
                     s_str,
-                    f"Epoch {epoch + 1:03d} Step {cur:04d} Loss: {lossv:.3f}",
+                    f"Epoch {(epoch+1):03d} Step {cur:04d} Loss: {lossv:.3f}",
                     s_str
                 )
+                if use_wandb:
+                    wandb.log({"loss": lossv, "epoch": epoch+1, "step": cur})
         else:
             continue
         break
@@ -144,7 +148,9 @@ def train_bagged_model(
     random: bool=False,
     write_model: bool=False,
     cfg_dict: dict={},
-    runner_device: torch.device=learning_device
+    runner_device: torch.device=learning_device,
+    use_wandb: bool=False,
+    wandb_project: str="gen_play"
 ) -> list[tuple[dtyp, Estimator]]:
     rets = []
     uid = uuid4().hex
@@ -167,6 +173,19 @@ def train_bagged_model(
         pb_args.pop("noise_decay")
 
     for i in range(bag_ct):
+        if use_wandb:
+            wandb.init(
+                project=wandb_project,
+                group=uid, name=f"{uid}_{i+1}",
+                config={
+                    **deepcopy(cfg_dict),
+                    **deepcopy(pf_args),
+                    **deepcopy(opt_args),
+                    "bag_idx": (i + 1)
+                },
+                reinit=True
+            )
+
         ids_train, _ = split_df(df_w=df_m, ratio=ratio, random=random)
         df_mm = df_m.loc[df_m.index.get_level_values(0).isin(ids_train),]
         env_train = PlayEnv(
@@ -188,9 +207,17 @@ def train_bagged_model(
             idxs=None,
             write_loss=2,
             random=random,
-            training_device=runner_device
+            training_device=runner_device,
+            use_wandb=use_wandb
         )
         rets.append(mt)
+
+        if use_wandb:
+            wandb.log({
+                "log_z": dtyp(mt[0]),
+                "total_yards": dtyp(np.round((np.exp(mt[0])*x_field_max), 3))
+            })
+            wandb.finish()
 
         if write_model:
             wd = os.path.join(output_dir, uid)
@@ -207,7 +234,7 @@ def train_bagged_model(
             print(
                 (s_str[:-1] * 2).replace(s_char, "*"), "\n",
                 f"Total Yards for {uid}_{i+1}# ",
-                np.round((np.exp(mt[0]) * x_field_max), 3),
+                float(np.round((np.exp(mt[0])*x_field_max), 3)),
                 (s_str[:-1] * 2).replace(s_char, "*"), "\n",
             )
 
