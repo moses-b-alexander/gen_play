@@ -32,7 +32,7 @@ class Decoder(nn.Module):
         self.register_buffer("max_delta", torch.tensor(max_deltas))
 
         std_init = 0.00
-        assert max_stdv > min_stdv and max_stdv < 1e-1 and min_stdv > 1e-6
+        assert max_stdv > min_stdv and max_stdv <= 1e-1 and min_stdv >= 1e-5
         self.min_stdv = min_stdv
         self.max_stdv = max_stdv
 

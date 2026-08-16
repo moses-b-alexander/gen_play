@@ -18,6 +18,10 @@ class Attender(nn.Module):
 
         self.dim_embedding = dim_embedding
 
+        self.num_heads = max(1, min(self.num_heads, self.dim_embedding - 1))
+        while self.dim_embedding % self.num_heads != 0:
+            self.num_heads -= 1
+
         self.dim_head = self.dim_embedding // self.num_heads
         self.dim_scale = sqrt(self.dim_head)
 
