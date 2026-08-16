@@ -127,6 +127,16 @@ HP_FIELDS: list[HPField] = [
         suggested_values=(1, 2, 3, 4),
     ),
     HPField(
+        key="dt", label="SDE Step Size",
+        group="SDE",
+        kind="float", default=DEFAULTS["dt"],
+        description=(
+            "Euler integration step size for the SDE solver "
+            "(must be between 1e-13 and 1e-1)."
+        ),
+        suggested_values=(1e-3, 1e-2, 5e-2),
+    ),
+    HPField(
         key="final_dim", label="Shared Hidden Dim",
         group="Model",
         kind="int", default=DEFAULTS["final_dim"],

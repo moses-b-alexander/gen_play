@@ -29,6 +29,7 @@ _CLAMP_BOUNDS: dict[str, tuple[float, float, bool]] = {
     "n_trials": (1, float("inf"), False),
     "decoder_min_stdv": (1e-5, 1e-1, False),
     "decoder_max_stdv": (1e-5, 1e-1, False),
+    "dt": (1e-13, 1e-1, False),
 }
 
 def _clamp(key: str, value: float) -> float:

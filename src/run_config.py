@@ -23,6 +23,7 @@ DEFAULTS: dict[str, str] = {
     "drift_size": "2",
     "diffusion_size": "2",
     "diff_eq_dim_middle": "32",
+    "dt": "1e-2",
     "final_dim": "64",
     "pow_iters": "1",
     "learning_rate": "1e-4",
@@ -117,7 +118,7 @@ def build_run_config(cfg: dict[str, str]) -> dict:
         dim_middle=int(cfg["diff_eq_dim_middle"]),
         steps=2,
         rtol=1e-5, atol=1e-5,
-        dt=1e-2,
+        dt=float(cfg["dt"]),
     )
     decoder_kwargs = dict(
         min_s=float(cfg["decoder_min_stdv"]),

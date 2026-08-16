@@ -92,6 +92,7 @@ _FIXED_NOISE_FLOOR = float(_RC_DEFAULTS["noise_floor"])
 _FIXED_NOISE_CEILING = float(_RC_DEFAULTS["noise_ceiling"])
 _FIXED_NOISE_DECAY = float(_RC_DEFAULTS["noise_decay"])
 _FIXED_NOISE_EXP = float(_RC_DEFAULTS["noise_exp"])
+_FIXED_DT = float(_RC_DEFAULTS["dt"])
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +300,7 @@ def _build_pf_hps(
         dim_middle=hps["diff_eq_dim_middle"],
         steps=2,
         rtol=1e-5, atol=1e-5,
-        dt=1e-2,
+        dt=_FIXED_DT,
     )
     decoder_hps = (
         get_decoder_hyperparameters(
