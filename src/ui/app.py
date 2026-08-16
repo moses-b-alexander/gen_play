@@ -20,13 +20,13 @@ PIPELINE_SCRIPT = SRC_DIR / "pipeline.py"
 
 _GROUP_ICONS = {
     "Encoder": "cable",
-    "Diffusion / SDE": "waves",
-    "Model (Shared)": "hub",
+    "SDE": "waves",
+    "Model": "hub",
     "Optimizer": "trending_up",
     "Reward": "military_tech",
-    "Decoder / Output Noise": "graphic_eq",
-    "Data & Season": "calendar_month",
-    "Search Control": "smart_toy",
+    "Decoder": "graphic_eq",
+    "Data": "calendar_month",
+    "Search": "smart_toy",
 }
 
 _NAV_ITEMS = [

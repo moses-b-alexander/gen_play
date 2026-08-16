@@ -54,20 +54,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from copy import deepcopy
 from time import perf_counter
 
-# Pin CWD to the repo root before anything below is imported --
-# common/dirs.py resolves processed_*/, output/, etc. off os.getcwd(), so
-# this has to happen before `from common.dirs import processed_dir` (and
-# ai.train's own internal import of it) further down. Works whether this is
-# run as `python src/hp_search.py` from the repo root or `python
-# hp_search.py` from inside src/. multiprocessing's spawned workers inherit
-# this process's CWD, so _trial_worker subprocesses pick it up too.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 os.chdir(PROJECT_ROOT)
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-import anthropic
+import anthropic # pyright: ignore[reportMissingImports]
 import numpy as np
 import pandas as pd
 import torch
@@ -86,7 +79,9 @@ from data.constants import (
     max_deltas, max_window, reward_sign, shape_players, x_field_max,
 )
 from data.processing import postprocess_df, set_reward, split_df
-from run_config import DEFAULTS as _RC_DEFAULTS, FIXED_PRIOR_MEANS, FIXED_PRIOR_STDVS
+from run_config import (
+    DEFAULTS as _RC_DEFAULTS, FIXED_PRIOR_MEANS, FIXED_PRIOR_STDVS,
+)
 
 # Fixed (not searched) values, sourced from run_config so this file can't
 # silently drift from the dashboard/main.py defaults again.
@@ -118,10 +113,7 @@ _HP_PROPS: dict = {
     },
     "dim_player": {
         "type": "integer",
-        "description": (
-            "Per-player embedding dimension."
-            " num_heads must evenly divide this."
-        ),
+        "description": "Per-player embedding dimension.",
         "enum": [64, 128, 256],
     },
     "num_heads": {
@@ -168,16 +160,8 @@ _HP_PROPS: dict = {
     },
     "diff_eq_dim_middle": {
         "type": "integer",
-        "description": (
-            "Hidden width of SDE networks."
-            " Should be <= final_dim."
-        ),
+        "description": "Hidden width of SDE networks.",
         "enum": [16, 32, 64],
-    },
-    "sde_steps": {
-        "type": "integer",
-        "description": "Euler integration steps for the SDE.",
-        "enum": [2, 4, 6, 8],
     },
     "batch_size": {
         "type": "integer",
@@ -313,7 +297,7 @@ def _build_pf_hps(
         drift_size=hps["drift_size"],
         diffusion_size=hps["diffusion_size"],
         dim_middle=hps["diff_eq_dim_middle"],
-        steps=hps["sde_steps"],
+        steps=2,
         rtol=1e-5, atol=1e-5,
         dt=1e-2,
     )
@@ -544,17 +528,14 @@ SYSTEM_PROMPT = (
     "- Encoder: GRU + multi-head attention over player"
     " sequences.\n"
     "  dim_play / dim_player: embedding sizes.\n"
-    "  num_heads: must divide dim_player evenly\n"
-    "  (e.g. 4 on 128 = OK; 8 on 64 = OK).\n"
+    "  num_heads: attention heads.\n"
     "  dropout: regularisation (~1800 plays;"
     " 0.10 is a safe prior).\n"
     "  expansion: MLP width multiplier"
     " (1=linear, 2=standard FFN).\n"
     "- SDE (diff-eq): continuous-time dynamics.\n"
     "  drift_size / diffusion_size: MLP depth.\n"
-    "  diff_eq_dim_middle: hidden width"
-    " (keep <= final_dim).\n"
-    "  sde_steps: Euler steps (4 is usually fine).\n"
+    "  diff_eq_dim_middle: hidden width.\n"
     "- Shared: final_dim is the bottleneck"
     " for SDE and decoder.\n"
     "- Optimiser: AdamW; lr strongly affects convergence.\n"
@@ -564,15 +545,16 @@ SYSTEM_PROMPT = (
     "  num_epochs: passes over the training set. More epochs"
     " directly multiply trial wall-clock time, so weigh"
     " this against the trial time budget.\n"
-    "- Reward: r(yg) = reward_scale * sigmoid(yg),"
-    " yg normalised to [-1, +1]."
-    " reward_scale acts as inverse temperature:"
-    " higher -> sharper focus on high-yardage plays.\n\n"
+    "- Reward: r(yg) = reward_scale / (1 + exp(sign * yg *"
+    " reward_beta)), yg normalised to [-1, +1]."
+    " reward_beta acts as inverse temperature:"
+    " higher -> sharper focus on high-yardage plays;"
+    " reward_scale only sets the reward's ceiling.\n\n"
     "STRATEGY\n"
     "1. Baseline: dim_play=128, dim_player=128,"
     " num_heads=4, dropout=0.10, expansion=2,\n"
     "   final_dim=64, drift=2, diffusion=2,"
-    " dim_middle=32, sde_steps=4,\n"
+    " dim_middle=32,\n"
     "   lr=1e-4, batch_size=8, num_epochs=1,"
     " reward_scale=1.0.\n"
     "2. Vary 1-2 axes per trial to isolate effects.\n"

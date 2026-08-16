@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from data.constants import play_catgs
 from run_config import DEFAULTS
 
 
@@ -17,14 +18,14 @@ class HPField:
     suggested_values: tuple=field(default_factory=tuple)
 
 GROUPS: list[str] = [
-    "Encoder",
-    "Diffusion / SDE",
-    "Model (Shared)",
     "Optimizer",
+    "Model",
+    "Encoder",
+    "Decoder",
+    "SDE",
     "Reward",
-    "Decoder / Output Noise",
-    "Data & Season",
-    "Search Control",
+    "Data",
+    "Search",
 ]
 
 HP_FIELDS: list[HPField] = [
@@ -39,17 +40,59 @@ HP_FIELDS: list[HPField] = [
         key="dim_player", label="Player Embedding Dim",
         group="Encoder",
         kind="int", default=DEFAULTS["dim_player"],
-        description=(
-            "Per-player embedding dimension. num_heads must evenly "
-            "divide this."
-        ),
+        description="Per-player embedding dimension.",
         suggested_values=(64, 128, 256),
+    ),
+    HPField(
+        key="lags_def_tm", label="Defense Teammate Lags",
+        group="Encoder",
+        kind="str", default=DEFAULTS["lags_def_tm"],
+        description=(
+            "Comma-separated frame-lag offsets used to build defensive "
+            "players' history features relative to their teammates."
+        ),
+    ),
+    HPField(
+        key="lags_off_tm", label="Offense Teammate Lags",
+        group="Encoder",
+        kind="str", default=DEFAULTS["lags_off_tm"],
+        description=(
+            "Comma-separated frame-lag offsets used to build offensive "
+            "players' history features relative to their teammates."
+        ),
+    ),
+    HPField(
+        key="lags_def_op", label="Defense Opponent Lags",
+        group="Encoder",
+        kind="str", default=DEFAULTS["lags_def_op"],
+        description=(
+            "Comma-separated frame-lag offsets used to build defensive "
+            "players' history features relative to their opponents."
+        ),
+    ),
+    HPField(
+        key="lags_off_op", label="Offense Opponent Lags",
+        group="Encoder",
+        kind="str", default=DEFAULTS["lags_off_op"],
+        description=(
+            "Comma-separated frame-lag offsets used to build offensive "
+            "players' history features relative to their opponents."
+        ),
+    ),
+    HPField(
+        key="expansion", label="MLP Expansion",
+        group="Encoder",
+        kind="int", default=DEFAULTS["expansion"],
+        description=(
+            "MLP width expansion factor (output = expansion^depth * dim)."
+        ),
+        suggested_values=(1, 2, 3),
     ),
     HPField(
         key="num_heads", label="Attention Heads",
         group="Encoder",
         kind="int", default=DEFAULTS["num_heads"],
-        description="Attention heads. Must divide dim_player evenly.",
+        description="Count of attention heads.",
         suggested_values=(2, 4, 8),
     ),
     HPField(
@@ -61,63 +104,82 @@ HP_FIELDS: list[HPField] = [
         ),
         suggested_values=(0.0, 0.05, 0.10, 0.20),
     ),
-    HPField(
-        key="expansion", label="MLP Expansion",
-        group="Encoder",
-        kind="int", default=DEFAULTS["expansion"],
-        description=(
-            "MLP width expansion factor (output = expansion^depth * dim)."
-        ),
-        suggested_values=(1, 2, 3),
-    ),
 
     HPField(
-        key="drift_size", label="Drift Network Depth",
-        group="Diffusion / SDE",
-        kind="int", default=DEFAULTS["drift_size"],
-        description="Depth of the SDE drift network.",
-        suggested_values=(1, 2, 3, 4),
-    ),
-    HPField(
-        key="diffusion_size", label="Diffusion Network Depth",
-        group="Diffusion / SDE",
-        kind="int", default=DEFAULTS["diffusion_size"],
-        description="Depth of the SDE diffusion network.",
-        suggested_values=(1, 2, 3, 4),
-    ),
-    HPField(
-        key="diff_eq_dim_middle", label="SDE Hidden Width",
-        group="Diffusion / SDE",
+        key="diff_eq_dim_middle", label="SDE Hidden Dim",
+        group="SDE",
         kind="int", default=DEFAULTS["diff_eq_dim_middle"],
-        description="Hidden width of SDE networks. Should be <= final_dim.",
+        description="Hidden dim of SDE networks.",
         suggested_values=(16, 32, 64),
     ),
     HPField(
-        key="sde_steps", label="Euler Steps",
-        group="Diffusion / SDE",
-        kind="int", default=DEFAULTS["sde_steps"],
-        description=(
-            "Number of output evaluation points passed to sdeint "
-            "(ts=linspace(0,1,steps)); actual integration granularity "
-            "is set by dt."
-        ),
-        suggested_values=(2, 4, 6, 8),
+        key="drift_size", label="Drift Network Depth",
+        group="SDE",
+        kind="int", default=DEFAULTS["drift_size"],
+        description="Depth of the SDE drift network (must be 2-4).",
+        suggested_values=(2, 3, 4),
     ),
-
+    HPField(
+        key="diffusion_size", label="Diffusion Network Depth",
+        group="SDE",
+        kind="int", default=DEFAULTS["diffusion_size"],
+        description="Depth of the SDE diffusion network (must be 0-6).",
+        suggested_values=(1, 2, 3, 4),
+    ),
     HPField(
         key="final_dim", label="Shared Hidden Dim",
-        group="Model (Shared)",
+        group="Model",
         kind="int", default=DEFAULTS["final_dim"],
         description=(
-            "Shared hidden dim (dim_h) feeding into the SDE and decoder."
+            "Shared hidden dim: "
+            "out of the encoder, through the SDE, into the decoder."
         ),
         suggested_values=(32, 64, 128),
     ),
     HPField(
         key="pow_iters", label="Power Iterations",
-        group="Model (Shared)",
+        group="Model",
         kind="int", default=DEFAULTS["pow_iters"],
-        description="Spectral-norm power iterations per forward pass.",
+        description=(
+            "Spectral-norm power iterations per forward pass "
+            "(must be 1-4)."
+        ),
+    ),
+    HPField(
+        key="noise_floor", label="PF Noise Floor",
+        group="Model",
+        kind="float", default=DEFAULTS["noise_floor"],
+        description=(
+            "Lower bound on the per-step noise scale added to the "
+            "latent during training."
+        ),
+    ),
+    HPField(
+        key="noise_ceiling", label="PF Noise Ceiling",
+        group="Model",
+        kind="float", default=DEFAULTS["noise_ceiling"],
+        description=(
+            "Upper bound on the per-step noise scale added to the "
+            "latent during training."
+        ),
+    ),
+    HPField(
+        key="noise_decay", label="PF Noise Decay",
+        group="Model",
+        kind="float", default=DEFAULTS["noise_decay"],
+        description=(
+            "Fraction of a trial's total gradient steps "
+            "used as the latent noise schedule's decay gap."
+        ),
+    ),
+    HPField(
+        key="noise_exp", label="PF Noise Exponent",
+        group="Model",
+        kind="float", default=DEFAULTS["noise_exp"],
+        description=(
+            "Exponent controlling how fast the latent noise schedule "
+            "decays with step count."
+        ),
     ),
 
     HPField(
@@ -152,18 +214,14 @@ HP_FIELDS: list[HPField] = [
         key="reward_scale", label="Reward Scale",
         group="Reward",
         kind="float", default=DEFAULTS["reward_scale"],
-        description=(
-            "Multiplier on the sigmoid reward r(yg) = scale * sigmoid(yg). "
-            "Acts as inverse temperature: higher values sharpen the reward "
-            "signal toward high-yardage plays."
-        ),
+        description="Multiplier on the sigmoid reward.",
         suggested_values=(0.5, 1.0, 2.0, 5.0),
     ),
     HPField(
         key="reward_beta", label="Reward Beta",
         group="Reward",
         kind="float", default=DEFAULTS["reward_beta"],
-        description="Beta shaping term applied alongside reward_scale.",
+        description="Steepness of the reward sigmoid."
     ),
     HPField(
         key="reward_sign", label="Reward Sign",
@@ -174,7 +232,7 @@ HP_FIELDS: list[HPField] = [
         ),
     ),
     HPField(
-        key="max_score_diff", label="Max Score Diff",
+        key="max_score_diff", label="Max Score Difference",
         group="Reward",
         kind="float", default=DEFAULTS["max_score_diff"],
         description=(
@@ -184,64 +242,27 @@ HP_FIELDS: list[HPField] = [
     ),
 
     HPField(
-        key="decoder_min_stdv", label="Decoder Min Stdv",
-        group="Decoder / Output Noise",
+        key="decoder_min_stdv", label="Decoder Min Standard Deviation",
+        group="Decoder",
         kind="float", default=DEFAULTS["decoder_min_stdv"],
         description=(
-            "Lower bound of the decoder's predicted output stdev "
-            "(must be >= 1e-6)."
+            "Lower bound of the decoder's predicted output standard "
+            "deviation (must be >= 1e-5)."
         ),
     ),
     HPField(
-        key="decoder_max_stdv", label="Decoder Max Stdv",
-        group="Decoder / Output Noise",
+        key="decoder_max_stdv", label="Decoder Max Standard Deviation",
+        group="Decoder",
         kind="float", default=DEFAULTS["decoder_max_stdv"],
         description=(
-            "Upper bound of the decoder's predicted output stdev "
-            "(must be <= 1e-2)."
-        ),
-    ),
-    HPField(
-        key="noise_floor", label="PF Noise Floor",
-        group="Decoder / Output Noise",
-        kind="float", default=DEFAULTS["noise_floor"],
-        description=(
-            "Lower bound on the per-step noise scale added to the "
-            "PF's hidden state during training."
-        ),
-    ),
-    HPField(
-        key="noise_ceiling", label="PF Noise Ceiling",
-        group="Decoder / Output Noise",
-        kind="float", default=DEFAULTS["noise_ceiling"],
-        description=(
-            "Upper bound on the per-step noise scale added to the "
-            "PF's hidden state during training."
-        ),
-    ),
-    HPField(
-        key="noise_decay", label="PF Noise Decay",
-        group="Decoder / Output Noise",
-        kind="float", default=DEFAULTS["noise_decay"],
-        description=(
-            "Fraction of a trial's total gradient steps "
-            "(batches_per_epoch * num_epochs) used as the PF noise "
-            "schedule's decay gap."
-        ),
-    ),
-    HPField(
-        key="noise_exp", label="PF Noise Exponent",
-        group="Decoder / Output Noise",
-        kind="float", default=DEFAULTS["noise_exp"],
-        description=(
-            "Exponent controlling how fast the PF noise schedule "
-            "decays with step count."
+            "Upper bound of the decoder's predicted output standard "
+            "deviation (must be <= 1e-1)."
         ),
     ),
 
     HPField(
-        key="seasons", label="Seasons (TEAM:YEAR, comma-sep)",
-        group="Data & Season",
+        key="seasons", label="Seasons (TEAM:YEAR, comma-separated)",
+        group="Data",
         kind="str", default=DEFAULTS["seasons"],
         description=(
             "Comma-separated TEAM:YEAR pairs, e.g. 'TB:2022' or "
@@ -250,16 +271,13 @@ HP_FIELDS: list[HPField] = [
     ),
     HPField(
         key="match_count", label="Matches per Season",
-        group="Data & Season",
+        group="Data",
         kind="int", default=DEFAULTS["match_count"],
-        description=(
-            "Cap on matches loaded per season. Only used when "
-            "main.py re-processes raw data (saved=False)."
-        ),
+        description="Cap on matches loaded per season.",
     ),
     HPField(
         key="train_ratio", label="Train Split Ratio",
-        group="Data & Season",
+        group="Data",
         kind="float", default=DEFAULTS["train_ratio"],
         description=(
             "Fraction of trajectories assigned to the training split."
@@ -267,52 +285,61 @@ HP_FIELDS: list[HPField] = [
     ),
     HPField(
         key="max_window", label="Max Window",
-        group="Data & Season",
+        group="Data",
         kind="int", default=DEFAULTS["max_window"],
         description="Maximum number of frames kept per play window.",
     ),
     HPField(
         key="cut_two_min", label="Cut Two-Minute Drill",
-        group="Data & Season",
+        group="Data",
         kind="bool", default=DEFAULTS["cut_two_min"],
         description="Exclude two-minute-drill situations from the dataset.",
     ),
     HPField(
-        key="catg_idxs", label="Category Indices",
-        group="Data & Season",
+        key="catg_idxs", label="Play Categories",
+        group="Data",
         kind="str", default=DEFAULTS["catg_idxs"],
         description=(
-            "Comma-separated play-category indices to include, "
-            "e.g. '0' or '0,1'."
+            "Comma-separated play categories to include, case-insensitive "
+            "\n-- e.g. 'Pass' or 'Pass, Rush'."
         ),
     ),
     HPField(
-        key="km_alpha_decay", label="Formation KMeans Alpha Decay",
-        group="Data & Season",
-        kind="float", default=DEFAULTS["km_alpha_decay"],
-        description="Alpha decay for the formation-clustering feature.",
+        key="snap_x_low", label="Snap X Low",
+        group="Data",
+        kind="float", default=DEFAULTS["snap_x_low"],
+        description=(
+            "Lower bound of the normalized field-x range plays must "
+            "snap within to be kept."
+        ),
+    ),
+    HPField(
+        key="snap_x_high", label="Snap X High",
+        group="Data",
+        kind="float", default=DEFAULTS["snap_x_high"],
+        description=(
+            "Upper bound of the normalized field-x range plays must "
+            "snap within to be kept."
+        ),
     ),
     HPField(
         key="km_num_clusters", label="Formation KMeans Clusters",
-        group="Data & Season",
+        group="Data",
         kind="int", default=DEFAULTS["km_num_clusters"],
         description=(
             "Number of clusters for the formation-clustering feature."
         ),
     ),
     HPField(
-        key="snap_x_range", label="Snap X Range (lo,hi)",
-        group="Data & Season",
-        kind="str", default=DEFAULTS["snap_x_range"],
-        description=(
-            "Normalized field-x range (comma-separated lo,hi) plays "
-            "must snap within to be kept."
-        ),
+        key="km_alpha_decay", label="Formation KMeans Alpha",
+        group="Data",
+        kind="float", default=DEFAULTS["km_alpha_decay"],
+        description="Alpha decay for the formation-clustering feature.",
     ),
 
     HPField(
         key="n_trials", label="Total Trials",
-        group="Search Control",
+        group="Search",
         kind="int", default=DEFAULTS["n_trials"],
         description=(
             "Total number of trial evaluations for the agentic HP search."
@@ -320,7 +347,7 @@ HP_FIELDS: list[HPField] = [
     ),
     HPField(
         key="n_parallel", label="Parallel Trials (GPUs)",
-        group="Search Control",
+        group="Search",
         kind="int", default=DEFAULTS["n_parallel"],
         description=(
             "1 = sequential loop; k>1 = k-GPU batched proposals per round."
@@ -328,11 +355,10 @@ HP_FIELDS: list[HPField] = [
     ),
     HPField(
         key="claude_model", label="Claude Model",
-        group="Search Control",
+        group="Search",
         kind="str", default=DEFAULTS["claude_model"],
         description=(
-            "Anthropic model ID used to propose hyperparameter "
-            "configurations."
+            "Anthropic model ID for proposing hyperparameter configurations."
         ),
     ),
 ]
@@ -345,3 +371,45 @@ def fields_by_group() -> dict[str, list[HPField]]:
 
 def defaults_as_strings() -> dict[str, str]:
     return {f.key: str(f.default) for f in HP_FIELDS}
+
+_CATG_LABEL_OVERRIDES = {"Two Point Conversion": "2P"}
+CATG_LABELS: dict[int, str] = {
+    i: _CATG_LABEL_OVERRIDES.get(name, name)
+    for i, name in enumerate(play_catgs)
+}
+_CATG_LABEL_TO_IDX: dict[str, int] = {
+    label.lower(): idx for idx, label in CATG_LABELS.items()
+}
+
+def catg_idxs_to_labels(raw: str) -> str:
+    out = []
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:  continue
+        try:
+            out.append(CATG_LABELS.get(int(tok), tok))
+        except ValueError:
+            out.append(tok)
+    return ", ".join(out)
+
+def catg_labels_to_idxs(raw: str) -> str:
+    out = []
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:  continue
+        if tok.lower() in _CATG_LABEL_TO_IDX:
+            out.append(str(_CATG_LABEL_TO_IDX[tok.lower()]))
+        else:
+            out.append(tok)
+    return ",".join(out)
+
+def catg_label_tokens_valid(raw: str) -> bool:
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:  continue
+        if tok.lower() in _CATG_LABEL_TO_IDX:  continue
+        try:
+            int(tok)
+        except ValueError:
+            return False
+    return True
