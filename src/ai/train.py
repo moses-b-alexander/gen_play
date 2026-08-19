@@ -110,27 +110,30 @@ def train_model(
             worker_init_fn=seed_worker, generator=gen
         )
 
-    cur = 0
-    for epoch in range(ne):
+    cur_g = 0
+    for epc in range(1, ne + 1):
+        cur_e = 0
         for batch in loader:
-            cur += 1
-            if cur > ((2 ** 31) - 2):  break
+            cur_g += 1
+            cur_e += 1
+
+            if cur_g > ((2 ** 15) - 2):  break
 
             gfn, opt, lossv = training_step(
                 env=env, batch=batch,
                 gfnet=gfn, opt=opt,
-                step_num=cur,
+                step_num=cur_g,
                 step_device=training_device
             )
 
-            if write_loss > 0 and cur % write_loss == 0:
+            if write_loss > 0 and cur_e % write_loss == 0:
                 print(
                     s_str,
-                    f"Epoch {(epoch+1):03d} Step {cur:04d} Loss: {lossv:.3f}",
+                    f"Epoch {epc:03d} Step {cur_e:04d} Loss: {lossv:.3f}",
                     s_str
                 )
                 if use_wandb:
-                    wandb.log({"loss": lossv, "epoch": epoch+1, "step": cur})
+                    wandb.log({"loss": lossv, "epoch": epc, "step": cur_e})
         else:
             continue
         break

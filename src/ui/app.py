@@ -1,15 +1,20 @@
 
 from __future__ import annotations
 
-from nicegui import app, ui # pyright: ignore[reportMissingImports]
+from nicegui import app, ui
 from pathlib import Path
 import subprocess
 import sys
 
 from ui import theme
 from ui.components import render_field, section_card
-from ui.config_store import list_configs, load_config, save_config
-from ui.hp_schema import GROUPS, defaults_as_strings, fields_by_group
+from ui.config_store import (
+    delete_config, list_configs, load_config, save_config,
+)
+from ui.constants import (
+    active_slug, colors, group_icons, groups, max_name_length, nav_items
+)
+from ui.hp_schema import defaults_as_strings, fields_by_group
 
 import run_config as rc
 
@@ -17,25 +22,6 @@ import run_config as rc
 SRC_DIR = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = SRC_DIR.parent
 PIPELINE_SCRIPT = SRC_DIR / "pipeline.py"
-
-_GROUP_ICONS = {
-    "Encoder": "cable",
-    "SDE": "waves",
-    "Model": "hub",
-    "Optimizer": "trending_up",
-    "Reward": "military_tech",
-    "Decoder": "graphic_eq",
-    "Data": "calendar_month",
-    "Search": "smart_toy",
-}
-
-_NAV_ITEMS = [
-    ("Hyperparameters", "tune", True),
-    ("Search Runs", "science", False),
-    ("Training", "play_circle", False),
-    ("Results", "insights", False),
-    ("Settings", "settings", False),
-]
 
 def build_page() -> None:
     theme.apply()
@@ -70,7 +56,7 @@ def build_page() -> None:
     ):
         ui.label("NAVIGATION")\
             .classes("text-xs text-gray-500 px-2 mb-1 tracking-wider")
-        for label, icon, enabled in _NAV_ITEMS:
+        for label, icon, enabled in nav_items:
             classes = "gp-nav-item px-3 py-2 items-center gap-3 w-full"
             if enabled:  classes += " gp-nav-item-active"
             else:  classes += " cursor-not-allowed opacity-50"
@@ -83,14 +69,14 @@ def build_page() -> None:
 
     @ui.refreshable
     def form_grid() -> None:
-        groups = fields_by_group()
+        grouped_fields = fields_by_group()
         with ui.grid(columns=2).classes("w-full gap-4"):
-            for group_name in GROUPS:
-                hp_fields = groups.get(group_name, [])
+            for group_name in groups:
+                hp_fields = grouped_fields.get(group_name, [])
                 if not hp_fields:
                     continue
                 with section_card(
-                    group_name, _GROUP_ICONS.get(group_name, "tune")
+                    group_name, group_icons.get(group_name, "tune")
                 ):
                     for hp_field in hp_fields:
                         render_field(
@@ -108,19 +94,20 @@ def build_page() -> None:
                 saved_at = payload.get("saved_at", "?")
             except (OSError, ValueError):
                 saved_at = "?"
-            active_pill.set_text(f"active.json set ({saved_at})")
-            active_pill.style(f"color: {theme.COLORS['success']}")
+            active_pill.set_text(
+                f"{rc.ACTIVE_CONFIG_PATH.name} set ({saved_at})")
+            active_pill.style(f"color: {colors['success']}")
         else:
             active_pill.set_text(
-                "no active.json — main.py uses built-in defaults")
-            active_pill.style(f"color: {theme.COLORS['text_muted']}")
+                f"no {rc.ACTIVE_CONFIG_PATH.name} — "
+                "main.py uses built-in defaults")
+            active_pill.style(f"color: {colors['text_muted']}")
 
     def _on_field_change() -> None:
         status_pill.set_text(_status_text())
         status_pill.style(
             f"color: {
-                theme.COLORS['danger']
-                if state['errors'] else theme.COLORS['success']
+                colors['danger'] if state['errors'] else colors['success']
             }"
         )
         json_preview.set_text(_format_json())
@@ -158,9 +145,9 @@ def build_page() -> None:
                 ui.button(
                     "Set Active", icon="bolt", on_click=lambda: _set_active()
                 ).props("color=blue dense").tooltip(
-                    "Writes these values to dashboard_configs/active.json — "
-                    "pipeline.py loads this on next run. Only non-invalid "
-                    "fields are allowed through."
+                    f"Writes these values to configurations/"
+                    f"{rc.ACTIVE_CONFIG_PATH.name} — pipeline.py loads this "
+                    "on next run. Only non-invalid fields are allowed."
                 )
                 run_button = (
                     ui.button(
@@ -169,8 +156,9 @@ def build_page() -> None:
                     )
                     .props("color=positive dense")
                     .tooltip(
-                        "Saves as active.json, runs `python pipeline.py` "
-                        "as its own process, then closes this dashboard."
+                        f"Saves as {rc.ACTIVE_CONFIG_PATH.name}, runs "
+                        "`python pipeline.py` as its own process, then "
+                        "closes this dashboard."
                     )
                 )
 
@@ -189,17 +177,23 @@ def build_page() -> None:
         ui.label("Save configuration").classes("text-base font-semibold")
         name_input = ui.input(
             "Config name", value="my-config"
-        ).props("outlined dense").classes("w-full")
+        ).props(
+            f"outlined dense maxlength={max_name_length} counter"
+        ).classes("w-full")
         with ui.row().classes("justify-end gap-2 w-full"):
             ui.button(
                 "Cancel", on_click=save_dialog.close).props("flat dense")
 
             def _do_save() -> None:
-                path = save_config(
-                    name_input.value or "config", state["values"])
+                try:
+                    path = save_config(
+                        name_input.value or "config", state["values"])
+                except ValueError as exc:
+                    ui.notify(str(exc), type="negative")
+                    return
                 ui.notify(f"Saved -> {path.name}", type="positive")
                 save_dialog.close()
-                refresh_load_list()
+                refresh_load_list.refresh()
 
             ui.button("Save", on_click=_do_save).props("color=primary dense")
 
@@ -207,40 +201,56 @@ def build_page() -> None:
         "gp-card p-4 gap-3 w-96"
     ):
         ui.label("Load configuration").classes("text-base font-semibold")
-        load_list_col = ui.column().classes(
-            "w-full gap-1 max-h-80 overflow-auto")
-
-        def refresh_load_list() -> None:
-            load_list_col.clear()
-            configs = list_configs()
-            with load_list_col:
-                if not configs:
-                    ui.label(
-                        "No saved configs yet."
-                    ).classes("text-xs text-gray-500")
-                for cfg_path in configs:
-                    _config_row(cfg_path)
+        _load_dialog_state = {"selected": None}
 
         def _config_row(cfg_path: Path) -> None:
+            is_selected = _load_dialog_state["selected"] == cfg_path
             with ui.row().classes(
                 "items-center justify-between w-full gp-nav-item px-2 py-1"
             ):
-                ui.label(cfg_path.stem).classes("text-sm")
+                with ui.row().classes("items-center gap-2"):
+                    def _load(p=cfg_path) -> None:
+                        loaded = load_config(p)
+                        state["values"].update(loaded)
+                        state["errors"].clear()
+                        form_grid.refresh()
+                        _on_field_change()
+                        _load_dialog_state["selected"] = p
+                        load_dialog.close()
+                        ui.notify(f"Loaded {p.stem}", type="info")
 
-                def _load(p=cfg_path) -> None:
-                    loaded = load_config(p)
-                    state["values"].update(loaded)
-                    state["errors"].clear()
-                    form_grid.refresh()
-                    _on_field_change()
-                    load_dialog.close()
-                    ui.notify(f"Loaded {p.stem}", type="info")
+                    ui.button(
+                        icon=(
+                            "radio_button_checked" if is_selected
+                            else "radio_button_unchecked"
+                        ),
+                        on_click=_load,
+                    ).props("flat dense round size=sm color=green")
+                    ui.label(cfg_path.stem).classes("text-sm")
+
+                def _delete(p=cfg_path) -> None:
+                    delete_config(p)
+                    if _load_dialog_state["selected"] == p:
+                        _load_dialog_state["selected"] = None
+                    refresh_load_list.refresh()
+                    ui.notify(f"Deleted {p.stem}", type="warning")
 
                 ui.button(
-                    icon="download", on_click=_load
-                ).props("flat dense round size=sm")
+                    icon="delete", on_click=_delete
+                ).props("flat dense round size=sm color=negative")
 
-        refresh_load_list()
+        @ui.refreshable
+        def refresh_load_list() -> None:
+            configs = list_configs()
+            if not configs:
+                ui.label(
+                    "No saved configs yet."
+                ).classes("text-xs text-gray-500")
+            for cfg_path in configs:
+                _config_row(cfg_path)
+
+        with ui.column().classes("w-full gap-1 max-h-80 overflow-auto"):
+            refresh_load_list()
 
     def _reset() -> None:
         state["values"] = defaults_as_strings()
@@ -255,16 +265,16 @@ def build_page() -> None:
                 type="negative",
             )
             return False
-        save_config("active", state["values"])
+        save_config(active_slug, state["values"])
         _refresh_active_pill()
-        refresh_load_list()
+        refresh_load_list.refresh()
         return True
 
     def _set_active() -> None:
         if _save_active():
             ui.notify(
-                "Saved to dashboard_configs/active.json — pipeline.py will "
-                "use these values on its next run.",
+                f"Saved to configurations/{rc.ACTIVE_CONFIG_PATH.name} — "
+                "pipeline.py will use these values on its next run.",
                 type="positive",
             )
 
@@ -272,11 +282,11 @@ def build_page() -> None:
         proc = state["process"]
         if proc is None:
             run_pill.set_text("idle")
-            run_pill.style(f"color: {theme.COLORS['text_muted']}")
+            run_pill.style(f"color: {colors['text_muted']}")
             run_button.enable()
         elif proc.poll() is None:
             run_pill.set_text(f"running (pid {proc.pid})")
-            run_pill.style(f"color: {theme.COLORS['warning']}")
+            run_pill.style(f"color: {colors['warning']}")
             run_button.disable()
         else:
             code = proc.returncode
@@ -284,8 +294,7 @@ def build_page() -> None:
             run_pill.set_text(f"last run exited {code}")
             run_pill.style(
                 f"color: {
-                    theme.COLORS['success']
-                    if ok else theme.COLORS['danger']
+                    colors['success'] if ok else colors['danger']
                 }"
             )
             run_button.enable()

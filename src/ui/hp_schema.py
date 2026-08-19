@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from data.constants import play_catgs
+from ui.constants import groups
+
 from run_config import DEFAULTS
 
 
@@ -16,17 +18,6 @@ class HPField:
     default: object
     description: str=""
     suggested_values: tuple=field(default_factory=tuple)
-
-GROUPS: list[str] = [
-    "Optimizer",
-    "Model",
-    "Encoder",
-    "Decoder",
-    "SDE",
-    "Reward",
-    "Data",
-    "Search",
-]
 
 HP_FIELDS: list[HPField] = [
     HPField(
@@ -374,7 +365,7 @@ HP_FIELDS: list[HPField] = [
 ]
 
 def fields_by_group() -> dict[str, list[HPField]]:
-    out: dict[str, list[HPField]] = {g: [] for g in GROUPS}
+    out = {g: [] for g in groups}
     for f in HP_FIELDS:
         out.setdefault(f.group, []).append(f)
     return out

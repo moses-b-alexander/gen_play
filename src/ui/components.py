@@ -1,67 +1,37 @@
 
 from __future__ import annotations
 
-from nicegui import ui # pyright: ignore[reportMissingImports]
+from nicegui import ui
 from typing import Callable
 
-from common.constants import fps
 from run_config import parse_int_list
+from ui.constants import (
+    clamp_bounds, exclusive_eps, list_clamp_bounds, paired_bounds
+)
 from ui.hp_schema import (
     HPField,
     catg_idxs_to_labels, catg_labels_to_idxs, catg_label_tokens_valid
 )
 
 
-_EXCLUSIVE_EPS = 1e-6
-
-_CLAMP_BOUNDS: dict[str, tuple[float, float, bool]] = {
-    "dropout": (0.0, 1.0, False),
-    "dim_play": (1, float("inf"), False),
-    "dim_player": (1, float("inf"), False),
-    "final_dim": (1, float("inf"), False),
-    "diff_eq_dim_middle": (1, float("inf"), False),
-    "drift_size": (2, 4, False),
-    "diffusion_size": (0, 6, False),
-    "pow_iters": (1, 4, False),
-    "batch_size": (1, float("inf"), False),
-    "num_epochs": (1, float("inf"), False),
-    "n_parallel": (1, float("inf"), False),
-    "n_trials": (1, float("inf"), False),
-    "decoder_min_stdv": (1e-5, 1e-1, False),
-    "decoder_max_stdv": (1e-5, 1e-1, False),
-    "dt": (1e-13, 1e-1, False),
-}
-
 def _clamp(key: str, value: float) -> float:
-    lo, hi, exclusive = _CLAMP_BOUNDS[key]
+    lo, hi, exclusive = clamp_bounds[key]
     if exclusive:
-        lo = lo + _EXCLUSIVE_EPS
-        hi = hi - _EXCLUSIVE_EPS
+        lo = lo + exclusive_eps
+        hi = hi - exclusive_eps
     return min(max(value, lo), hi)
 
-_PAIRED_BOUNDS: dict[str, tuple[str, str]] = {
-    "decoder_min_stdv": ("decoder_max_stdv", "lower"),
-    "decoder_max_stdv": ("decoder_min_stdv", "upper"),
-}
-
 def _resolve_pair(key: str, value: float, values: dict[str, str]) -> float:
-    sibling_key, role = _PAIRED_BOUNDS[key]
+    sibling_key, role = paired_bounds[key]
     try:
         sibling = float(values.get(sibling_key, ""))
     except ValueError:
         return value
     if role == "lower" and value >= sibling:
-        return _clamp(key, sibling - _EXCLUSIVE_EPS)
+        return _clamp(key, sibling - exclusive_eps)
     if role == "upper" and value <= sibling:
-        return _clamp(key, sibling + _EXCLUSIVE_EPS)
+        return _clamp(key, sibling + exclusive_eps)
     return value
-
-_LIST_CLAMP_BOUNDS: dict[str, tuple[int, int]] = {
-    "lags_def_tm": (0, fps * 30),
-    "lags_off_tm": (0, fps * 30),
-    "lags_def_op": (0, fps * 30),
-    "lags_off_op": (0, fps * 30),
-}
 
 def _clamp_int_list(raw: str, lo: int, hi: int) -> tuple[bool, str]:
     try:
@@ -93,8 +63,7 @@ def cast_value(field: HPField, raw: str) -> tuple[bool, object | str]:
 
 def render_field(
     hp_field: HPField,
-    values: dict[str, str],
-    errors: dict[str, str],
+    values: dict[str, str], errors: dict[str, str],
     on_change: Callable[[], None],
 ) -> None:
     with ui.column().classes("gap-1 w-full"):
@@ -139,19 +108,19 @@ def render_field(
                 result = f"unrecognized category in '{raw}'"
             else:
                 ok, result = cast_value(f, raw)
-                if ok and key in _LIST_CLAMP_BOUNDS:
-                    lo, hi = _LIST_CLAMP_BOUNDS[key]
+                if ok and key in list_clamp_bounds:
+                    lo, hi = list_clamp_bounds[key]
                     ok, result = _clamp_int_list(raw, lo, hi)
                     if ok and result != raw:
                         raw = result
                         text_input.set_value(raw)
-                if ok and key in _CLAMP_BOUNDS:
+                if ok and key in clamp_bounds:
                     clamped = _clamp(key, result)
                     if clamped != result:
                         result = clamped
                         raw = str(result)
                         text_input.set_value(raw)
-                if ok and key in _PAIRED_BOUNDS:
+                if ok and key in paired_bounds:
                     paired = _resolve_pair(key, result, values)
                     if paired != result:
                         result = paired

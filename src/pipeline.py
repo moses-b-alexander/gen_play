@@ -6,7 +6,6 @@ from pathlib import Path
 import sys
 
 os.environ["OMP_NUM_THREADS"] = "1"
-
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
@@ -52,13 +51,18 @@ def run_pipeline() -> None:
     _active_cfg = rc.load_active_config()
     rcfg = rc.build_run_config(_active_cfg)
     print(
-        "Using ACTIVE dashboard config (dashboard_configs/active.json)"
+        f"Using ACTIVE dashboard config (configurations/"
+        f"{rc.ACTIVE_CONFIG_PATH.name})"
         if rc.ACTIVE_CONFIG_PATH.exists()
-        else "No active.json found -- using built-in defaults"
+        else f"No {rc.ACTIVE_CONFIG_PATH.name} found, using existing defaults"
     )
     opt_args = rcfg["opt_args"]
 
-    saved = True
+    saved = any(
+        f"sed_{len(rcfg['seasons']):02d}_{rcfg['match_count']}" in p.name and
+        p.is_dir() and len(list(p.iterdir())) > 0
+        for p in PROJECT_ROOT.iterdir()
+    )
 
     torch.cuda.empty_cache()
     torch.serialization.add_safe_globals([dtyp])

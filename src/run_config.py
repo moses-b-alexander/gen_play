@@ -5,10 +5,11 @@ import json
 from pathlib import Path
 
 from common.constants import fps
+from ui.constants import active_slug
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ACTIVE_CONFIG_PATH = PROJECT_ROOT / "dashboard_configs" / "active.json"
+ACTIVE_CONFIG_PATH = PROJECT_ROOT / "configurations" / f"{active_slug}.json"
 
 DEFAULTS: dict[str, str] = {
     "dim_play": "128",

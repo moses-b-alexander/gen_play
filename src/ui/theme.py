@@ -1,37 +1,24 @@
 
 from __future__ import annotations
 
-from nicegui import ui # pyright: ignore[reportMissingImports]
+from nicegui import ui
 
+from ui.constants import colors
 
-COLORS = {
-    "bg": "#14151b",
-    "bg_alt": "#191a22",
-    "surface": "#1d1f29",
-    "surface_hover": "#242631",
-    "border": "#2b2e3a",
-    "accent": "#7c5cff",
-    "accent_soft": "#7c5cff26",
-    "text": "#e7e8ee",
-    "text_muted": "#9297ab",
-    "success": "#34d399",
-    "danger": "#f87171",
-    "warning": "#fbbf24",
-}
 
 _CSS = f"""
 :root {{
-    --gp-bg: {COLORS["bg"]};
-    --gp-bg-alt: {COLORS["bg_alt"]};
-    --gp-surface: {COLORS["surface"]};
-    --gp-surface-hover: {COLORS["surface_hover"]};
-    --gp-border: {COLORS["border"]};
-    --gp-accent: {COLORS["accent"]};
-    --gp-accent-soft: {COLORS["accent_soft"]};
-    --gp-text: {COLORS["text"]};
-    --gp-text-muted: {COLORS["text_muted"]};
-    --gp-success: {COLORS["success"]};
-    --gp-danger: {COLORS["danger"]};
+    --gp-bg: {colors["bg"]};
+    --gp-bg-alt: {colors["bg_alt"]};
+    --gp-surface: {colors["surface"]};
+    --gp-surface-hover: {colors["surface_hover"]};
+    --gp-border: {colors["border"]};
+    --gp-accent: {colors["accent"]};
+    --gp-accent-soft: {colors["accent_soft"]};
+    --gp-text: {colors["text"]};
+    --gp-text-muted: {colors["text_muted"]};
+    --gp-success: {colors["success"]};
+    --gp-danger: {colors["danger"]};
 }}
 
 body {{
@@ -114,6 +101,6 @@ def apply() -> None:
     ui.dark_mode(True)
     ui.add_head_html(f"<style>{_CSS}</style>")
     ui.colors(
-        primary=COLORS["accent"],
-        positive=COLORS["success"], negative=COLORS["danger"]
+        primary=colors["accent"],
+        positive=colors["success"], negative=colors["danger"]
     )

@@ -30,7 +30,7 @@ if __name__ in {"__main__", "__mp_main__"}:
         native = False
 
     # app.shutdown() races uvicorn's wsproto websocket teardown when the
-    # browser's connection has already closed itself -- benign, just noisy.
+    # browser's connection has already closed itself.
     logging.getLogger("uvicorn.error").addFilter(
         lambda record: "CloseConnection" not in record.getMessage()
     )
