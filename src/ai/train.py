@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from typing import Type
 from uuid import uuid4
-import wandb # pyright: ignore[reportMissingImports]
+import wandb
 
 from ai.constants import action_dim, state_dim
 from ai.utils import seed_worker

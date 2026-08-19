@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 import sys
@@ -27,6 +28,12 @@ if __name__ in {"__main__", "__mp_main__"}:
         native = True
     except ImportError:
         native = False
+
+    # app.shutdown() races uvicorn's wsproto websocket teardown when the
+    # browser's connection has already closed itself -- benign, just noisy.
+    logging.getLogger("uvicorn.error").addFilter(
+        lambda record: "CloseConnection" not in record.getMessage()
+    )
 
     ui.run(
         title="Gen Play — Control Panel",

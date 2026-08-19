@@ -1,7 +1,7 @@
 
 import torch
 import torch.nn as nn
-import torchsde # pyright: ignore[reportMissingImports]
+import torchsde
 
 from ai.dynamics import Dynamics
 
@@ -29,7 +29,10 @@ class DiffEq(nn.Module):
         self.steps = steps if steps > 1 and isinstance(steps, int) else 2
         self.rtol = rtol if rtol > 0 and isinstance(rtol, float) else 1e-5
         self.atol = atol if atol > 0 and isinstance(atol, float) else 1e-4
-        self.dt = dt if dt >= 1e-12 and dt <= 1e-1 else 1e-2
+
+        self.dt = dt
+        if self.dt < 1e-13:  self.dt = 1e-13
+        if self.dt > 1e-1:  self.dt = 1e-1
 
         self.dim_embedding = dim_embedding
 

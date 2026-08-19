@@ -935,20 +935,20 @@ class Encoder(nn.Module):
         for kx, lags in self.player_keys_d.items():
             xd = {}
             if "def" in kx:
-                xd["0"] = x_def.clone()
-                xd["00"] = x_off.clone()
+                xd["this"] = x_def.clone()
+                xd["that"] = x_off.clone()
             if "off" in kx:
-                xd["0"] = x_off.clone()
-                xd["00"] = x_def.clone()
-            if "tm" in kx:  xd["1"] = xd["0"].clone()
-            if "op" in kx:  xd["1"] = xd["00"].clone()
+                xd["this"] = x_off.clone()
+                xd["that"] = x_def.clone()
+            if "tm" in kx:  xd["other"] = xd["this"].clone()
+            if "op" in kx:  xd["other"] = xd["that"].clone()
             for lag_str in lags:
                 lag = int(lag_str[-4:])
                 x_lag = torch.zeros((lag, B, N//2, agent_dim-2)).to(x.device)
                 x_f_lag = torch.cat(
-                    [x_lag.clone(), xd["1"][:T-lag, ...].clone()], dim=0)
+                    [x_lag.clone(), xd["other"][:T-lag, ...].clone()], dim=0)
                 x_d[lag_str] = torch.cat(
-                    [xd["0"].clone(), x_f_lag.clone()], dim=2).detach()
+                    [xd["this"].clone(), x_f_lag.clone()], dim=2).detach()
 
         reentrant = False
         z03_d, z04_d, z05_d = {}, {}, {}
