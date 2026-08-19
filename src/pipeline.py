@@ -58,10 +58,9 @@ def run_pipeline() -> None:
     )
     opt_args = rcfg["opt_args"]
 
-    saved = any(
-        f"sed_{len(rcfg['seasons']):02d}_{rcfg['match_count']}" in p.name and
-        p.is_dir() and len(list(p.iterdir())) > 0
-        for p in PROJECT_ROOT.iterdir()
+    processed_path = Path(processed_dir)
+    saved = (
+        processed_path.is_dir() and len(list(processed_path.iterdir())) > 0
     )
 
     torch.cuda.empty_cache()
