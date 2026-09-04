@@ -76,7 +76,7 @@ from common.constants import dtyp
 from common.devices import learning_device
 from common.dirs import processed_dir
 from data.constants import (
-    max_deltas, max_window, reward_sign, shape_players, x_field_max,
+    max_deltas, reward_sign, shape_players, x_field_max,
 )
 from data.processing import postprocess_df, set_reward, split_df
 from run_config import (
@@ -85,6 +85,7 @@ from run_config import (
 
 # Fixed (not searched) values, sourced from run_config so this file can't
 # silently drift from the dashboard/main.py defaults again.
+_FIXED_MAX_WINDOW = int(_RC_DEFAULTS["max_window"])
 _FIXED_WDR = float(_RC_DEFAULTS["weight_decay_rate"])
 _FIXED_DECODER_MIN_STDV = float(_RC_DEFAULTS["decoder_min_stdv"])
 _FIXED_DECODER_MAX_STDV = float(_RC_DEFAULTS["decoder_max_stdv"])
@@ -399,7 +400,7 @@ def _trial_worker(args: tuple) -> dict:
         gpu_id, hps, parquet_paths,
         proc_params, num_timesteps, syspath,
     )
-    proc_params = (reward_sign, ci, max_window)
+    proc_params = (reward_sign, ci, _FIXED_MAX_WINDOW)
     """
     (
         gpu_id, hps, parquet_paths,
@@ -593,7 +594,7 @@ def agentic_hp_search(
     num_timesteps : max timestep index from the dataset
     parquet_paths : parquet paths for parallel workers
                     (required when n_parallel > 1)
-    proc_params   : (reward_sign, ci, max_window) for workers
+    proc_params   : (reward_sign, ci, _FIXED_MAX_WINDOW) for workers
     n_trials      : total number of evaluations
     n_parallel    : 1=sequential; k>1=k-GPU batched
     claude_model  : Anthropic model ID
@@ -832,7 +833,7 @@ def _load_seasons(
         df_all,
         sn=reward_sign,
         ci=[0],
-        mw=max_window,
+        mw=_FIXED_MAX_WINDOW,
         skip_reward=True,
     ).copy()
 
@@ -912,7 +913,7 @@ if __name__ == "__main__":
         f"  timesteps: {num_timesteps}"
     )
 
-    proc_params = (reward_sign, [0], max_window)
+    proc_params = (reward_sign, [0], _FIXED_MAX_WINDOW)
 
     best, history = agentic_hp_search(
         df_base=df_base,

@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
-from typing import Any, Optional
+from typing import Any
 
 from gflownet.states import States
 

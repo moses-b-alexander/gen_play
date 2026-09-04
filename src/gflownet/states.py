@@ -3,17 +3,17 @@ from __future__ import annotations
 
 from abc import ABC
 from math import prod
-import numpy as np
 import torch
+from torch import Tensor
 from typing import ClassVar, List, Sequence
 
 
 class States(ABC):
     state_shape: ClassVar[tuple[int, ...]]
-    s0: ClassVar[torch.Tensor]
-    sf: ClassVar[torch.Tensor]
+    s0: ClassVar[Tensor]
+    sf: ClassVar[Tensor]
 
-    def __init__(self, tensor: torch.Tensor) -> None:
+    def __init__(self, tensor: Tensor) -> None:
         assert self.s0.shape == self.state_shape
         assert self.sf.shape == self.state_shape
         assert tensor.shape[-len(self.state_shape):] == self.state_shape
@@ -93,7 +93,7 @@ class States(ABC):
 
         return self.__class__(stacked_states)
 
-    def _compare(self, other: torch.Tensor) -> torch.Tensor:
+    def _compare(self, other: Tensor) -> Tensor:
         n_batch_dims = len(self.batch_shape)
 
         if n_batch_dims == 1:
@@ -117,7 +117,7 @@ class States(ABC):
         return out
 
     @property
-    def is_initial_state(self) -> torch.Tensor:
+    def is_initial_state(self) -> Tensor:
         if len(self.batch_shape) == 1:
             source_states_tensor = self.__class__.s0
         else:
@@ -128,7 +128,7 @@ class States(ABC):
         return self._compare(source_states_tensor)
 
     @property
-    def is_sink_state(self) -> torch.Tensor:
+    def is_sink_state(self) -> Tensor:
         if len(self.batch_shape) == 1:
             sink_states_tensor = self.__class__.sf
         else:

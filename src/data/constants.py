@@ -17,13 +17,10 @@ num_games = 20
 game_time = 4 * 15 * 60
 num_drives = game_time // 4
 
-max_play_frames = (fps * 60) / 4.00
+max_play_frames = fps * 12 # current trajectory memory usage requires T < 400
 
 catg_idxs = [0, ]
 # catg_idxs = [0, 1, ]
-
-max_window = 180
-downsampling = 1
 
 max_deltas = [0.02, 0.01]
 max_dx, max_dy = max_deltas[0], max_deltas[1]

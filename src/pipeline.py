@@ -111,7 +111,10 @@ def run_pipeline() -> None:
 
     df_u_f = postprocess_df(
         df_u_f,
-        **rcfg["postprocess_kwargs"],
+        **(
+            rcfg["postprocess_kwargs"] |
+            dict(mw=min(rcfg["postprocess_kwargs"]["mw"], max_play_frames))
+        ),
         add_xrec=False, skip_reward=False
     )
     df_u_f = df_u_f.copy()
@@ -220,12 +223,9 @@ def run_pipeline() -> None:
 
     retsu0, run_id = train_bagged_model(
         bag_ct=1, ratio=0.999,
-        # bag_ct=4, ratio=0.900,
-        # bag_ct=1024, ratio=0.001,
         df_m=df_u_f_train,
         pf_cls=PF, pf_args=pf_hps,
         pb_cls=PF, pb_args=pb_hps,
-        # pb_cls=None, pb_args={},
         opt_args=opt_args,
         random=True,
         write_model=True,
@@ -246,7 +246,6 @@ def run_pipeline() -> None:
     eval_states, eval_ids, eval_df = produce_evaluation_states(
         num=num_eval_traj, df_e=df_u_f_test, random=False
     )
-    eval_states_r = PlayStates(permute_batch_first(eval_states.tensor))
 
     avgs = aggregate_samples(retsu0, eval_states)
 
@@ -259,7 +258,7 @@ def run_pipeline() -> None:
 
     ips = list(range(num_eval_traj))
     for ip in ips[::len(ips)//3]:
-        a00, s00 = plot_play_2(None, orig[ip], gend[ip], num_timesteps, 1)
+        _ = plot_play_2(None, orig[ip], gend[ip], num_timesteps, 1)
         plt.show()
         plt.close("all")
 

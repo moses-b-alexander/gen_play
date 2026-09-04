@@ -1,37 +1,31 @@
 
 from abc import ABC, abstractmethod
-import math
 import torch
 import torch.nn as nn
-from typing import Any, cast, Generic, Tuple, TypeVar
+from typing import Any, cast
 
 from ai.constants import global_dim
-from common.constants import dtyp, fps
+from common.constants import dtyp
 from data.constants import max_play_frames
-from gflownet.containers import Container
-from gflownet.env import Env
 from gflownet.estimators import Estimator
-from gflownet.states import States
 from gflownet.prob_calculations import get_trajectory_pfs_and_pbs
 from gflownet.trajectories import Trajectories
 
 
-SampleT = TypeVar("SampleT", bound=Container)
-
-class GFlowNet(ABC, nn.Module, Generic[SampleT]):
+class GFlowNet(ABC, nn.Module):
     # [GFlowNet Foundations](https://arxiv.org/pdf/2111.09266)
 
     @abstractmethod
-    def to_training_samples(self, trajectories: Trajectories) -> SampleT:
+    def to_training_samples(self, trajectories: Trajectories) -> Trajectories:
 
         pass
 
     @abstractmethod
-    def loss(self, training_objects: Any) -> torch.Tensor:
+    def loss(self, training_objects: Any, inference: bool) -> torch.Tensor:
 
         pass
 
-class TrajectoryBasedGFlowNet(GFlowNet[Trajectories]):
+class TrajectoryBasedGFlowNet(GFlowNet):
     def __init__(
         self, pf: Estimator, pb: Estimator | None
     ) -> None:
@@ -41,10 +35,11 @@ class TrajectoryBasedGFlowNet(GFlowNet[Trajectories]):
         self.pb = pb
 
     def get_scores(
-        self, trajectories: Trajectories, fill_value: float=0.0
+        self,
+        trajectories: Trajectories, inference: bool, fill_value: float
     ) -> torch.Tensor:
         log_pf_trajectories, log_pb_trajectories = get_trajectory_pfs_and_pbs(
-            self.pf, self.pb, trajectories, fill_value)
+            self.pf, self.pb, trajectories, inference, fill_value)
 
         feats = trajectories.states.tensor[:, :, :, :-2]
         feat_sums = feats.sum(dim=(-2, -1))
@@ -78,24 +73,26 @@ class TBGFlowNet(TrajectoryBasedGFlowNet):
     def __init__(
         self,
         pf: Estimator, pb: Estimator | None,
-        logZ: dtyp | nn.Parameter | None=None, init_logZ: float=0.0
+        logZ: dtyp | nn.Parameter | None=None
     ) -> None:
         self.constant_pb = True if pb is None else False
         super().__init__(pf, pb)
 
-        if logZ is None:  self.logZ = nn.Parameter(torch.tensor(init_logZ))
+        if logZ is None:  self.logZ = nn.Parameter(torch.tensor(0.0))
         else:  self.logZ = logZ
 
-    def loss(self, trajectories: Trajectories) -> torch.Tensor:
+    def loss(
+        self, trajectories: Trajectories, inference: bool
+    ) -> torch.Tensor:
         # [Trajectory Balance loss](https://arxiv.org/abs/2201.13259)
 
-        scores = self.get_scores(trajectories)
+        scores = self.get_scores(trajectories, inference, 0.00)
         log_Z = cast(torch.Tensor, self.logZ)
 
         stt = trajectories.states.tensor
-        inv_len = stt.size(1) / stt.size(0)
+        inv_t = 1 / stt.size(0)
         total_len = stt.size(1) * stt.size(0)
-        norm_lens = stt[1, :, 0, global_dim-1] / stt.size(0)
+        norm_lens = stt[1, :, 0, global_dim-1] * inv_t
 
         norm_scores = (
             scores * (
@@ -105,13 +102,13 @@ class TBGFlowNet(TrajectoryBasedGFlowNet):
         z_scores = norm_scores + log_Z.squeeze()
         final_scores = nn.functional.huber_loss(
             input=z_scores, target=torch.zeros_like(z_scores),
-            delta=total_len + 1, reduction="none"
+            delta=(total_len + 1), reduction="none"
         )
 
         loss = (
             final_scores.mean(dim=0) * (
                 (stt[1, :, 0, global_dim-1]).sum(dim=0) / total_len
-            ).clamp(min=(4.00 * inv_len), max=(1.00 * 1))
+            ).clamp(min=(4.00 * inv_t), max=1.00)
         ) + 1e-12
 
         return loss

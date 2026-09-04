@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from common.constants import fps
+from data.constants import max_play_frames
 from ui.constants import active_slug
 
 
@@ -40,7 +40,7 @@ DEFAULTS: dict[str, str] = {
     "seasons": "TB:2022",
     "match_count": "15",
     "train_ratio": "0.9",
-    "max_window": str(fps * 30),
+    "max_window": f"{max_play_frames}",
     "cut_two_min": "True",
     "catg_idxs": "0",
     "km_alpha_decay": "0.15",
