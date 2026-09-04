@@ -256,15 +256,12 @@ def train_bagged_model(
         df_m.index.get_level_values(0)
     )[1]))))) * ratio
 
-    pf_args |= {"noise_gap": int(
-        pf_args["noise_decay"] * ct * opt_args["ne"] // opt_args["bs"]
-    )}
-    pf_args.pop("noise_decay")
+    total_steps = max(
+        opt_args["bs"], int(ct * opt_args["ne"] // opt_args["bs"])
+    )
+    pf_args |= {"total_steps": total_steps}
     if pb_cls is not None:
-        pb_args |= {"noise_gap": int(
-            pb_args["noise_decay"] * ct * opt_args["ne"] // opt_args["bs"]
-        )}
-        pb_args.pop("noise_decay")
+        pb_args |= {"total_steps": total_steps}
 
     for i in range(bag_ct):
         if use_wandb:

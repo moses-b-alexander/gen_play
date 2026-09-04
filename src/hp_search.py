@@ -91,7 +91,6 @@ _FIXED_DECODER_MIN_STDV = float(_RC_DEFAULTS["decoder_min_stdv"])
 _FIXED_DECODER_MAX_STDV = float(_RC_DEFAULTS["decoder_max_stdv"])
 _FIXED_NOISE_FLOOR = float(_RC_DEFAULTS["noise_floor"])
 _FIXED_NOISE_CEILING = float(_RC_DEFAULTS["noise_ceiling"])
-_FIXED_NOISE_DECAY = float(_RC_DEFAULTS["noise_decay"])
 _FIXED_NOISE_EXP = float(_RC_DEFAULTS["noise_exp"])
 _FIXED_DT = float(_RC_DEFAULTS["dt"])
 
@@ -313,7 +312,6 @@ def _build_pf_hps(
     output_hps = dict(
         noise_floor=_FIXED_NOISE_FLOOR,
         noise_ceiling=_FIXED_NOISE_CEILING,
-        noise_decay=_FIXED_NOISE_DECAY,
         noise_exp=_FIXED_NOISE_EXP,
         prior_means=FIXED_PRIOR_MEANS,
         prior_stdvs=FIXED_PRIOR_STDVS,

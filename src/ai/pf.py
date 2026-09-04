@@ -18,8 +18,8 @@ class PF(Estimator):
         dim_start: int, dim_hidden: int, dim_end: int,
         pow_iters: int,
         encoder_hps: dict, diff_eq_hps: dict, decoder_hps: dict,
-        noise_floor: float, noise_ceiling: float, noise_gap: int,
-        noise_exp: float,
+        noise_floor: float, noise_ceiling: float, noise_exp: float,
+        total_steps: int,
         prior_means: tuple[tuple[float | list[float]]],
         prior_stdvs: tuple[tuple[float | list[float]]],
         device: torch.device
@@ -62,10 +62,11 @@ class PF(Estimator):
             backwards=self.backwards
         )
 
-        if noise_gap >= 1 and noise_gap <= 1e6 and isinstance(noise_gap, int):
-            self.noise_gap = noise_gap
+        if isinstance(total_steps, int) and total_steps > 0:
+            self.total_steps = total_steps
         else:
-            self.noise_gap = 2
+            self.total_steps = 1
+
         self.noise_floor = noise_floor if noise_floor > 0.00 else 1e-6
         self.noise_ceiling = noise_ceiling if noise_ceiling < 1.00 else 1e-1
         if self.noise_floor >= self.noise_ceiling:
@@ -139,9 +140,10 @@ class PF(Estimator):
 
         if training:
             n_scale = ((hT.detach()).std(dim=-1, keepdim=True))
-            n_step = self.noise_floor + (
-                (self.noise_ceiling - self.noise_floor) /
-                ((s + self.noise_gap) ** self.noise_exp)
+            n_sr = min((s / self.total_steps), 1.0)
+            n_step = self.noise_ceiling * (
+                (self.noise_floor / self.noise_ceiling) **
+                (n_sr ** self.noise_exp)
             )
             noise = torch.randn_like(hT) * n_scale * n_step
         else:

@@ -49,7 +49,6 @@ DEFAULTS: dict[str, str] = {
     "decoder_max_stdv": "1e-2",
     "noise_floor": "1e-6",
     "noise_ceiling": "1e-1",
-    "noise_decay": "0.2",
     "noise_exp": "1.0",
     "n_trials": "12",
     "n_parallel": "1",
@@ -128,7 +127,6 @@ def build_run_config(cfg: dict[str, str]) -> dict:
     output_kwargs = dict(
         noise_floor=float(cfg["noise_floor"]),
         noise_ceiling=float(cfg["noise_ceiling"]),
-        noise_decay=float(cfg["noise_decay"]),
         noise_exp=float(cfg["noise_exp"]),
         prior_means=FIXED_PRIOR_MEANS,
         prior_stdvs=FIXED_PRIOR_STDVS,

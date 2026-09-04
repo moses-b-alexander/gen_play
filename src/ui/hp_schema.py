@@ -165,21 +165,15 @@ HP_FIELDS: list[HPField] = [
         ),
     ),
     HPField(
-        key="noise_decay", label="PF Noise Decay",
-        group="Model",
-        kind="float", default=DEFAULTS["noise_decay"],
-        description=(
-            "Fraction of a trial's total gradient steps "
-            "used as the latent noise schedule's decay gap."
-        ),
-    ),
-    HPField(
         key="noise_exp", label="PF Noise Exponent",
         group="Model",
         kind="float", default=DEFAULTS["noise_exp"],
         description=(
-            "Exponent controlling how fast the latent noise schedule "
-            "decays with step count."
+            "Skews when the latent noise schedule's decay from ceiling "
+            "to floor happens within training: 1.0 is a constant "
+            "per-step decay rate, <1 front-loads the decay (drops fast "
+            "early, settles for most of the run), >1 back-loads it "
+            "(stays near ceiling longer, drops late)."
         ),
     ),
 
