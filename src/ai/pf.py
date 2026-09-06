@@ -140,7 +140,9 @@ class PF(Estimator):
 
         if training:
             n_scale = ((hT.detach()).std(dim=-1, keepdim=True))
-            n_sr = min((s / self.total_steps), 1.0)
+            n_sr = s / self.total_steps
+            if n_sr <= 0.0:  n_sr = 0.0
+            if n_sr >= 1.0:  n_sr = 1.0
             n_step = self.noise_ceiling * (
                 (self.noise_floor / self.noise_ceiling) **
                 (n_sr ** self.noise_exp)

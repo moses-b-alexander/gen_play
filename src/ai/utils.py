@@ -139,7 +139,7 @@ def load_models(
     return l
 
 def collect_distributions(
-    tups: list[tuple[dtyp, Estimator]], states: PlayStates
+    tups: list[tuple[dtyp, Estimator, dtyp]], states: PlayStates
 ) -> list[torch.distributions.independent.Independent]:
     dists = [
         t[1].to_probability_distribution(states, None, True) for t in tups

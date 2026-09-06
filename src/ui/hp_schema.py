@@ -220,7 +220,7 @@ HP_FIELDS: list[HPField] = [
         group="Validation",
         kind="float", default=DEFAULTS["validation_ratio"],
         description=(
-            "Fraction of trajectories held out for validation / "
+            "Fraction of trajectories held out for validation and "
             "early stopping. 0 disables early stopping."
         ),
     ),

@@ -39,19 +39,18 @@ def initialize_model(
     pf_params = list(p_f_model.parameters())
     pb_params = list(p_b_model.parameters()) if p_b_model is not None else []
 
-    optm = torch.optim.AdamW(
+    opto = torch.optim.AdamW(
         params=(pf_params + pb_params),
         lr=learning_rate, weight_decay=weight_decay_rate,
         betas=(0.900, 0.999), eps=1e-8
     ) # defaults
 
-    return (gf_net, p_f_model, p_b_model, optm)
+    return (gf_net, p_f_model, p_b_model, opto)
 
 def training_step(
-    env: PlayEnv, batch: tuple[torch.Tensor],
+    batch: tuple[torch.Tensor],
     gfnet: GFlowNet, opt: torch.optim.Optimizer,
-    step_num: int,
-    step_device: torch.device
+    step_num: int, step_device: torch.device
 ) -> tuple[GFlowNet, torch.optim.Optimizer, dtyp]:
     trajs = \
         build_trajectories_from_batch(batch=batch, tensor_device=step_device)
@@ -83,16 +82,16 @@ def train_model(
     env_val: PlayEnv | None=None,
     patience_frac: float=0.10, eval_every: int=-1, min_delta: float=0.01,
     use_wandb: bool=False
-) -> tuple[dtyp, nn.Module]:
+) -> tuple[dtyp, Estimator, dtyp]:
     ctrs = subset_containers(env=env, idxs=idxs)
     dataset = OfflineTrajectoryDataset(ctrs)
 
-    gfn, pf, pb, opt = initialize_model(
+    gfn, pf, pb, opti = initialize_model(
         env=env, fwd_model=p_f, bwd_model=p_b,
         learning_rate=lr, weight_decay_rate=wdr,
         model_device=training_device
     )
-    if optm is not None:  opt = optm
+    if optm is not None:  opti = optm
 
     if random:
         loader = DataLoader(
@@ -166,10 +165,8 @@ def train_model(
                 hit_step_cap = True
                 break
 
-            gfn, opt, lossv = training_step(
-                env=env, batch=batch,
-                gfnet=gfn, opt=opt,
-                step_num=cur_g,
+            gfn, opti, lossv = training_step(
+                batch=batch, gfnet=gfn, opt=opti, step_num=cur_g,
                 step_device=training_device
             )
 
@@ -231,7 +228,7 @@ def train_model(
         gfn.pf.load_state_dict(best_state[0])
         if gfn.pb is not None:  gfn.pb.load_state_dict(best_state[1])
 
-    if return_aux:  return (env.log_z, gfn.pf, gfn.pb, opt, best_val_loss)
+    if return_aux:  return (env.log_z, gfn.pf, gfn.pb, opti, best_val_loss)
     else:  return (env.log_z, gfn.pf, best_val_loss)
 
 def train_bagged_model(
@@ -247,7 +244,7 @@ def train_bagged_model(
     patience_frac: float=0.10, eval_every: int=-1, min_delta: float=0.01,
     use_wandb: bool=False,
     wandb_project: str="gen_play"
-) -> list[tuple[dtyp, Estimator]]:
+) -> list[tuple[dtyp, Estimator, dtyp]]:
     rets = []
     uid = uuid4().hex
 
