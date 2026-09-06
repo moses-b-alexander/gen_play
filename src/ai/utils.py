@@ -166,8 +166,8 @@ def permute_batch_first(t: torch.Tensor) -> torch.Tensor:
 
     return t1.contiguous()
 
-def accumulate_xy( # TODO null padded T
-    td: torch.Tensor, ts: torch.Tensor
+def accumulate_xy(
+    td: torch.Tensor, ts: torch.Tensor, cut: int=0
 ) -> tuple[tuple]:
 
     t = torch.zeros((ts.shape[0], shape_players, action_dim))
@@ -189,6 +189,11 @@ def accumulate_xy( # TODO null padded T
     t[..., 1] *= np.abs(y_bnd)
 
     tt = te.clone() if t.size(1) != shape_players else t.clone()
+
+    if not isinstance(cut, int):  cut = 0
+    if cut >= tt.size(0) or cut <= (-1 * tt.size(0)) + 2:  cut = 0
+    if cut >= 0 and cut <= 2:  cut = 0
+    if cut != 0:  tt[cut:, ...] = dtyp(0.0)
 
     return (
         (tt[:, :team_players, 0], tt[:, team_players:, 0]),

@@ -5,7 +5,8 @@ Agentic hyperparameter search using Claude.
 SEASON RECOMMENDATION FOR HP SEARCH
 -------------------------------------
 Default is TB 2022 — matches your existing baseline runs
-(bag_ct=1, ratio=0.999) and (bag_ct=8, ratio=0.700).
+(bag_count=1, validation_ratio=0.001) and
+(bag_count=8, validation_ratio=0.300).
 Use TB 2021 for the cleanest search signal (see ranking);
 swap with --seasons TB:2021.
 
@@ -363,15 +364,14 @@ def run_trial(
     ne = hps.pop("num_epochs")
     df_train = set_reward(df_base, rs=rs)
     pf_hps, pb_hps = _build_pf_hps(hps, num_timesteps)
-    opt_args = dict(bs=bs, lr=hps["learning_rate"], wdr=_FIXED_WDR, ne=ne)
 
     t0 = perf_counter()
     rets, _ = train_bagged_model(
-        bag_ct=1, ratio=0.9,
+        bag_count=1, validation_ratio=0.1,
         df_m=df_train,
         pf_cls=PF, pf_args=pf_hps,
         pb_cls=PF, pb_args=pb_hps,
-        opt_args=opt_args,
+        bs=bs, lr=hps["learning_rate"], wdr=_FIXED_WDR, ne=ne,
         random=True,
         write_model=False,
         runner_device=learning_device,
@@ -442,15 +442,14 @@ def _trial_worker(args: tuple) -> dict:
     bs = hps.pop("batch_size")
     ne = hps.pop("num_epochs")
     pf_hps, pb_hps = _build_pf_hps(hps, num_ts)
-    opt_args = dict(bs=bs, lr=hps["learning_rate"], wdr=_FIXED_WDR, ne=ne)
 
     t0 = perf_counter()
     rets, _ = train_bagged_model(
-        bag_ct=1, ratio=0.9,
+        bag_count=1, validation_ratio=0.1,
         df_m=df_train,
         pf_cls=PF, pf_args=pf_hps,
         pb_cls=PF, pb_args=pb_hps,
-        opt_args=opt_args,
+        bs=bs, lr=hps["learning_rate"], wdr=_FIXED_WDR, ne=ne,
         random=True,
         write_model=False,
         runner_device=learning_device,

@@ -56,8 +56,6 @@ def run_pipeline() -> None:
         if rc.ACTIVE_CONFIG_PATH.exists()
         else f"No {rc.ACTIVE_CONFIG_PATH.name} found, using existing defaults"
     )
-    opt_args = rcfg["opt_args"]
-
     processed_path = Path(processed_dir)
     saved = (
         processed_path.is_dir() and len(list(processed_path.iterdir())) > 0
@@ -139,7 +137,9 @@ def run_pipeline() -> None:
     print("\n\n")
     print(f"{df_shape} (Rows, Columns)")
     print(f"Total Number of Trajectories: {num_plays}")
-    print(f"Number of Trajectories per Batch: {opt_args['bs']}")
+    print(
+        f"Number of Trajectories per Batch: {rcfg['schedule_args']['bs']}"
+    )
     print(f"Number of Timesteps per Trajectory: {num_timesteps}")
     print(f"Number of Players per Timestep: {shape_players}")
     print(f"Number of Input|Output Vars per Player: {state_dim}|{action_dim}")
@@ -186,37 +186,35 @@ def run_pipeline() -> None:
         **output_hps,
     )
 
-    config_hps = {
-        "dtype": str(dtyp),
+    config_hps = { # TODO reorder these and check line lengths after
         "seed": seed,
+        "dtype": str(dtyp),
         "seasons": tsts,
         "season_count": len(tsts), "match_count": rcfg["match_count"],
         "reward_threshold": reward_threshold,
-        "reward_sign": -1 if not rcfg["postprocess_kwargs"]["sn"] else +1,
+        "reward_sign": (-1 if not rcfg["postprocess_kwargs"]["sn"] else +1),
         "reward_scale": rcfg["postprocess_kwargs"]["rs"],
         "reward_beta": rcfg["postprocess_kwargs"]["rb"],
-        "kmeans_decay": rcfg["postprocess_kwargs"]["ad"],
-        "kmeans_clusters": rcfg["postprocess_kwargs"]["nc"],
-        "split": rcfg["train_ratio"],
-        "lr": opt_args["lr"],
-        "wd": opt_args["wdr"],
-        "trajectories": num_plays,
-        "batch": opt_args["bs"],
-        "epochs": opt_args["ne"],
-        "fps": fps, "window": rcfg["postprocess_kwargs"]["mw"],
-        "timesteps": num_timesteps,
-        "players": shape_players,
-        "input_dim": state_dim,
-        "hidden_dim": shared_hps["dim_h"],
-        "output_dim": action_dim,
-        "dx_threshold": max_dx * x_field_max,
-        "dy_threshold": max_dy * abs(y_bnd),
-        "max_score": rcfg["postprocess_kwargs"]["msd"],
-        "snap_low": rcfg["postprocess_kwargs"]["sxr"][0],
-        "snap_high": rcfg["postprocess_kwargs"]["sxr"][1],
-        "cut_twomin": rcfg["postprocess_kwargs"]["ctm"],
-        "type": [play_catgs[ci] for ci in rcfg["postprocess_kwargs"]["ci"]],
-        "bag_count": bag_ct_u, "ratio": ratio_u,
+        "kmeans_decay_rate": rcfg["postprocess_kwargs"]["ad"],
+        "kmeans_cluster_count": rcfg["postprocess_kwargs"]["nc"],
+        "training_test_split_ratio": rcfg["train_ratio"],
+        "learning_rate": rcfg["optimizer_args"]["lr"],
+        "weight_decay_rate": rcfg["optimizer_args"]["wdr"],
+        "trajectory_count": num_plays,
+        "batch_size": rcfg["schedule_args"]["bs"],
+        "epoch_count": rcfg["schedule_args"]["ne"],
+        "frequency": fps, "window_cap": rcfg["postprocess_kwargs"]["mw"],
+        "timestep_count": num_timesteps,
+        "player_count": shape_players,
+        "input_dimension": state_dim,
+        "hidden_dimension": shared_hps["dim_h"],
+        "output_dimension": action_dim,
+        "delta_x_threshold": max_dx, "delta_y_threshold": max_dy,
+        "score_bound": rcfg["postprocess_kwargs"]["msd"],
+        "snap_x_lower_bound": rcfg["postprocess_kwargs"]["sxr"][0],
+        "snap_x_higher_bound": rcfg["postprocess_kwargs"]["sxr"][1],
+        "cut_last_two_minutes": rcfg["postprocess_kwargs"]["ctm"],
+        "type": ([play_catgs[ci] for ci in rcfg["postprocess_kwargs"]["ci"]]),
         "game_count_cap": num_games, "game_time_cap": game_time,
         "drive_count_cap": num_drives,
         "training_match_count": train_index, "test_match_count": test_index,
@@ -224,26 +222,25 @@ def run_pipeline() -> None:
         "torch_deterministic": torch_deterministic
     }
 
-    bag_ct_u = 1
-    ratio_u = 0.999
-
-    patience_u = -1
-    eval_every_u = -1
-    min_delta_u = 0.001
-
     config_hps |= {
-        "bag_count": bag_ct_u, "ratio": ratio_u,
-        "patience": patience_u, "eval_every": eval_every_u,
-        "min_delta": min_delta_u
+        "bag_count": rcfg["schedule_args"]["bag_count"],
+        "validation_ratio": rcfg["validation_args"]["validation_ratio"],
+        "patience_frac": rcfg["validation_args"]["patience_frac"],
+        "eval_every": rcfg["validation_args"]["eval_every"],
+        "min_delta": rcfg["validation_args"]["min_delta"],
     }
 
     retsu0, run_id = train_bagged_model(
-        bag_ct=bag_ct_u, ratio=ratio_u,
+        bag_count=rcfg["schedule_args"]["bag_count"],
+        validation_ratio=rcfg["validation_args"]["validation_ratio"],
         df_m=df_u_f_train,
         pf_cls=PF, pf_args=pf_hps,
         pb_cls=PF, pb_args=pb_hps,
-        opt_args=opt_args,
-        patience=patience_u, eval_every=eval_every_u, min_delta=min_delta_u,
+        bs=rcfg["schedule_args"]["bs"], ne=rcfg["schedule_args"]["ne"],
+        lr=rcfg["optimizer_args"]["lr"], wdr=rcfg["optimizer_args"]["wdr"],
+        patience_frac=rcfg["validation_args"]["patience_frac"],
+        eval_every=rcfg["validation_args"]["eval_every"],
+        min_delta=rcfg["validation_args"]["min_delta"],
         random=True,
         write_model=True,
         cfg_dict=config_hps,
@@ -260,7 +257,7 @@ def run_pipeline() -> None:
         mr.eval()
         retsu0.append((r[0], mr))
 
-    num_eval_traj = opt_args["bs"] // 4
+    num_eval_traj = rcfg["schedule_args"]["bs"] // 4
     eval_states, eval_ids, eval_df = produce_evaluation_states(
         num=num_eval_traj, df_e=df_u_f_test, random=False
     )

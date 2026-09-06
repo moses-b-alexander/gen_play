@@ -178,13 +178,6 @@ HP_FIELDS: list[HPField] = [
     ),
 
     HPField(
-        key="batch_size", label="Batch Size",
-        group="Optimizer",
-        kind="int", default=DEFAULTS["batch_size"],
-        description="Number of trajectories per training batch.",
-        suggested_values=(4, 8, 16, 32),
-    ),
-    HPField(
         key="learning_rate", label="Learning Rate",
         group="Optimizer",
         kind="float", default=DEFAULTS["learning_rate"],
@@ -197,12 +190,66 @@ HP_FIELDS: list[HPField] = [
         kind="float", default=DEFAULTS["weight_decay_rate"],
         description="AdamW weight decay rate.",
     ),
+
+    HPField(
+        key="batch_size", label="Batch Size",
+        group="Schedule",
+        kind="int", default=DEFAULTS["batch_size"],
+        description="Number of trajectories per training batch.",
+        suggested_values=(4, 8, 16, 32),
+    ),
     HPField(
         key="num_epochs", label="Epochs",
-        group="Optimizer",
+        group="Schedule",
         kind="int", default=DEFAULTS["num_epochs"],
         description="Number of passes over the training set.",
         suggested_values=(1, 2, 3, 5),
+    ),
+    HPField(
+        key="bag_count", label="Bag Count",
+        group="Schedule",
+        kind="int", default=DEFAULTS["bag_count"],
+        description=(
+            "Number of independently-trained models per run "
+            "(bagging ensemble size)."
+        ),
+    ),
+
+    HPField(
+        key="validation_ratio", label="Validation Ratio",
+        group="Validation",
+        kind="float", default=DEFAULTS["validation_ratio"],
+        description=(
+            "Fraction of trajectories held out for validation / "
+            "early stopping. 0 disables early stopping."
+        ),
+    ),
+    HPField(
+        key="patience_frac", label="Patience Fraction",
+        group="Validation",
+        kind="float", default=DEFAULTS["patience_frac"],
+        description=(
+            "Fraction of total validation checks to tolerate with no "
+            "improvement before stopping early."
+        ),
+    ),
+    HPField(
+        key="eval_every", label="Evaluate Every N Steps",
+        group="Validation",
+        kind="int", default=DEFAULTS["eval_every"],
+        description=(
+            "Steps between validation checks. Values <=1 auto-resolve "
+            "to once per epoch."
+        ),
+    ),
+    HPField(
+        key="min_delta", label="Min Delta",
+        group="Validation",
+        kind="float", default=DEFAULTS["min_delta"],
+        description=(
+            "Minimum relative validation-loss improvement required to "
+            "count as progress and reset patience."
+        ),
     ),
 
     HPField(

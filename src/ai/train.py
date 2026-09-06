@@ -142,6 +142,12 @@ def train_model(
             f"at least {min_delta * 100:.2f}% relative loss. ",
             s_str.replace("=", "~")
         )
+        if use_wandb:
+            wandb.config.update({
+                "eval_every_effective": eval_every,
+                "patience_effective": patience,
+                "min_delta_effective": min_delta
+            })
 
     best_val_loss = float("inf")
     best_state: tuple[dict, dict | None] | None = None
@@ -233,7 +239,7 @@ def train_bagged_model(
     df_m: pd.DataFrame,
     pf_cls: Type[Estimator], pb_cls: Type[Estimator],
     pf_args: dict, pb_args: dict,
-    opt_args: dict,
+    bs: int, lr: float, wdr: float, ne: int,
     random: bool=False,
     write_model: bool=False,
     cfg_dict: dict={},
@@ -254,9 +260,7 @@ def train_bagged_model(
     if ratio <= (0 + er):  ratio = (1 / nt) + (er * 1e-1) # just in case
     ct = nt * ratio
 
-    total_steps = max(
-        opt_args["bs"], int(ct * opt_args["ne"] // opt_args["bs"])
-    )
+    total_steps = max(bs, int(ct * ne // bs))
     pf_args |= {"total_steps": total_steps}
     if pb_cls is not None:
         pb_args |= {"total_steps": total_steps}
@@ -269,7 +273,7 @@ def train_bagged_model(
                 config={
                     **deepcopy(cfg_dict),
                     **deepcopy(pf_args),
-                    **deepcopy(opt_args),
+                    "validation_ratio_effective": (1.0 - ratio),
                     "bag_idx": (i + 1)
                 },
                 reinit=True
@@ -298,9 +302,9 @@ def train_bagged_model(
             env=env_train,
             p_f=models[0], p_b=models[1],
             optm=None,
-            bs=opt_args["bs"],
-            lr=opt_args["lr"], wdr=opt_args["wdr"],
-            ne=opt_args["ne"],
+            bs=bs,
+            lr=lr, wdr=wdr,
+            ne=ne,
             idxs=None,
             write_loss=2,
             random=random,

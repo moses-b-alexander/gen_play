@@ -8,7 +8,7 @@ max_name_length = 24
 active_slug = "current_config"
 
 groups = [
-    "Optimizer", "Model",
+    "Optimizer", "Schedule", "Validation", "Model",
     "Encoder", "Decoder", "SDE",
     "Reward", "Data",
     "Search",
@@ -35,11 +35,16 @@ clamp_bounds = {
     "pow_iters": (1, 4, False),
     "batch_size": (1, float("inf"), False),
     "num_epochs": (1, float("inf"), False),
+    "bag_count": (1, float("inf"), False),
     "n_parallel": (1, float("inf"), False),
     "n_trials": (1, float("inf"), False),
     "decoder_min_stdv": (1e-5, 1e-1, False),
     "decoder_max_stdv": (1e-5, 1e-1, False),
     "dt": (1e-13, 1e-1, False),
+    "validation_ratio": (0.0, 1.0, False),
+    "patience_frac": (0.0, 1.0, False),
+    "eval_every": (1, float("inf"), False),
+    "min_delta": (0.0, 1.0, False),
 }
 
 paired_bounds = {
@@ -57,6 +62,8 @@ group_icons = {
     "SDE": "waves",
     "Model": "hub",
     "Optimizer": "trending_up",
+    "Schedule": "event_repeat",
+    "Validation": "fact_check",
     "Reward": "military_tech",
     "Decoder": "graphic_eq",
     "Data": "calendar_month",

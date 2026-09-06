@@ -31,6 +31,11 @@ DEFAULTS: dict[str, str] = {
     "weight_decay_rate": "1e-5",
     "batch_size": "8",
     "num_epochs": "1",
+    "bag_count": "1",
+    "validation_ratio": "0.01",
+    "patience_frac": "0.10",
+    "eval_every": "1",
+    "min_delta": "0.01",
     "reward_scale": "1.0",
     "reward_beta": "10.0",
     "reward_sign": "False",
@@ -135,11 +140,20 @@ def build_run_config(cfg: dict[str, str]) -> dict:
         dim_h=int(cfg["final_dim"]),
         pow_iters=int(cfg["pow_iters"])
     )
-    opt_args = dict(
-        bs=int(cfg["batch_size"]),
+    optimizer_args = dict(
         lr=float(cfg["learning_rate"]),
         wdr=float(cfg["weight_decay_rate"]),
+    )
+    schedule_args = dict(
+        bs=int(cfg["batch_size"]),
         ne=int(cfg["num_epochs"]),
+        bag_count=int(cfg["bag_count"]),
+    )
+    validation_args = dict(
+        validation_ratio=float(cfg["validation_ratio"]),
+        patience_frac=float(cfg["patience_frac"]),
+        eval_every=int(cfg["eval_every"]),
+        min_delta=float(cfg["min_delta"]),
     )
 
     return dict(
@@ -152,5 +166,7 @@ def build_run_config(cfg: dict[str, str]) -> dict:
         decoder_kwargs=decoder_kwargs,
         output_kwargs=output_kwargs,
         shared_kwargs=shared_kwargs,
-        opt_args=opt_args,
+        optimizer_args=optimizer_args,
+        schedule_args=schedule_args,
+        validation_args=validation_args,
     )
