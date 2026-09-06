@@ -2,7 +2,8 @@
 import torch
 
 
-torch.backends.cudnn.deterministic = True
+torch_deterministic = True
+torch.backends.cudnn.deterministic = torch_deterministic
 
 global_dim, agent_dim = 28, 20
 state_dim = global_dim + agent_dim

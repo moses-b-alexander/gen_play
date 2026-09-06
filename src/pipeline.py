@@ -73,7 +73,7 @@ def run_pipeline() -> None:
     pd.set_option("display.max_rows", 1000)
     pd.set_option("display.max_columns", 100)
 
-    tsts = rcfg["seasons"]
+    tsts = [i for i in rcfg["seasons"]]
 
     unified_dfs, unified_dfs_f = [], []
     if not saved:
@@ -188,7 +188,9 @@ def run_pipeline() -> None:
 
     config_hps = {
         "dtype": str(dtyp),
-        "seasons": len(tsts), "matches": rcfg["match_count"],
+        "seed": seed,
+        "seasons": tsts,
+        "season_count": len(tsts), "match_count": rcfg["match_count"],
         "reward_threshold": reward_threshold,
         "reward_sign": -1 if not rcfg["postprocess_kwargs"]["sn"] else +1,
         "reward_scale": rcfg["postprocess_kwargs"]["rs"],
@@ -213,23 +215,39 @@ def run_pipeline() -> None:
         "snap_low": rcfg["postprocess_kwargs"]["sxr"][0],
         "snap_high": rcfg["postprocess_kwargs"]["sxr"][1],
         "cut_twomin": rcfg["postprocess_kwargs"]["ctm"],
-        "screen": screen_mode, "color": "#999999",
         "type": [play_catgs[ci] for ci in rcfg["postprocess_kwargs"]["ci"]],
+        "bag_count": bag_ct_u, "ratio": ratio_u,
+        "game_count_cap": num_games, "game_time_cap": game_time,
+        "drive_count_cap": num_drives,
+        "training_match_count": train_index, "test_match_count": test_index,
         "model_name": model_name,
+        "torch_deterministic": torch_deterministic
     }
 
-    print(s_str)
-    run_id = ""
+    bag_ct_u = 1
+    ratio_u = 0.999
+
+    patience_u = -1
+    eval_every_u = -1
+    min_delta_u = 0.001
+
+    config_hps |= {
+        "bag_count": bag_ct_u, "ratio": ratio_u,
+        "patience": patience_u, "eval_every": eval_every_u,
+        "min_delta": min_delta_u
+    }
 
     retsu0, run_id = train_bagged_model(
-        bag_ct=1, ratio=0.999,
+        bag_ct=bag_ct_u, ratio=ratio_u,
         df_m=df_u_f_train,
         pf_cls=PF, pf_args=pf_hps,
         pb_cls=PF, pb_args=pb_hps,
         opt_args=opt_args,
+        patience=patience_u, eval_every=eval_every_u, min_delta=min_delta_u,
         random=True,
         write_model=True,
         cfg_dict=config_hps,
+        use_wandb=False, wandb_project="gen_play",
         runner_device=learning_device
     )
 
@@ -242,7 +260,7 @@ def run_pipeline() -> None:
         mr.eval()
         retsu0.append((r[0], mr))
 
-    num_eval_traj = opt_args["bs"] // 2
+    num_eval_traj = opt_args["bs"] // 4
     eval_states, eval_ids, eval_df = produce_evaluation_states(
         num=num_eval_traj, df_e=df_u_f_test, random=False
     )
@@ -257,7 +275,7 @@ def run_pipeline() -> None:
     ]
 
     ips = list(range(num_eval_traj))
-    for ip in ips[::len(ips)//3]:
+    for ip in ips[::((len(ips) // 3) + 1)]:
         _ = plot_play_2(None, orig[ip], gend[ip], num_timesteps, 1)
         plt.show()
         plt.close("all")
