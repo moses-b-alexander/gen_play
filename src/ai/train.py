@@ -249,12 +249,13 @@ def train_bagged_model(
     rets = []
     uid = uuid4().hex
 
-    num_trajs = len(sorted(list(set(list(pd.factorize(
+    nt = len(sorted(list(set(list(pd.factorize(
         df_m.index.get_level_values(0)
     )[1])))))
-    if ratio >= 0.99:  ratio = 1.000 # for convenience
-    if ratio <= 0.01:  ratio = (1 / num_trajs) + 1e-6 # just in case
-    ct = num_trajs * ratio
+    er = 1 / (10 ** (int(np.log10(nt)) + 1))
+    if ratio >= (1 - er):  ratio = 1.000 # for convenience
+    if ratio <= (0 + er):  ratio = (1 / nt) + (er * 1e-1) # just in case
+    ct = nt * ratio
 
     total_steps = max(
         opt_args["bs"], int(ct * opt_args["ne"] // opt_args["bs"])
