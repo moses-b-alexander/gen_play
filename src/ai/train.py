@@ -192,7 +192,7 @@ def train_model(
                         val_losses.append(dtyp(gfn.loss(vtrajs, True).item()))
                 gfn.train()
 
-                val_loss = float(np.mean(val_losses)) \
+                val_loss = dtyp(np.mean(val_losses)) \
                     if len(val_losses) > 0 else float("inf")
                 print(
                     s_str,
@@ -231,8 +231,8 @@ def train_model(
         gfn.pf.load_state_dict(best_state[0])
         if gfn.pb is not None:  gfn.pb.load_state_dict(best_state[1])
 
-    if return_aux:  return (env.log_z, gfn.pf, gfn.pb, opt)
-    else:  return (env.log_z, gfn.pf)
+    if return_aux:  return (env.log_z, gfn.pf, gfn.pb, opt, best_val_loss)
+    else:  return (env.log_z, gfn.pf, best_val_loss)
 
 def train_bagged_model(
     bag_count: int, validation_ratio: float,

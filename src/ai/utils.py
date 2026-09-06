@@ -15,6 +15,10 @@ from data.play_gfn import PlayStates
 from gflownet.estimators import Estimator
 
 
+def inv_sqrt(q: float) -> float:
+
+    return (1.00 / (sqrt(q)))
+
 def seed_worker(worker_id: int) -> None:
     worker_seed = (seed + worker_id) % ((2 ** 31) - 1)
 
@@ -23,10 +27,6 @@ def seed_worker(worker_id: int) -> None:
     torch.manual_seed(worker_seed)
 
     return None
-
-def inv_sqrt(q: float) -> float:
-
-    return (1.00 / (sqrt(q)))
 
 def sinusoidal_positional_encoding(
     max_len: int, actual_lens: torch.Tensor, dim_out: int, tau: float,

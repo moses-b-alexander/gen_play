@@ -255,7 +255,7 @@ def run_pipeline() -> None:
         mr = PF(**r[1])
         _ = mr.load_state_dict(r[3])
         mr.eval()
-        retsu0.append((r[0], mr))
+        retsu0.append((r[0], mr, dtyp(-1.0)))
 
     num_eval_traj = rcfg["schedule_args"]["bs"] // 4
     eval_states, eval_ids, eval_df = produce_evaluation_states(

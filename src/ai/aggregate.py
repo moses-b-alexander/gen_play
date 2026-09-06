@@ -9,13 +9,13 @@ from data.play_gfn import PlayActions, PlayStates
 from gflownet.estimators import Estimator
 
 
-def aggregate_logz(tups: list[tuple[dtyp, Estimator]]) -> dtyp:
+def aggregate_logz(tups: list[tuple[dtyp, Estimator, dtyp]]) -> dtyp:
     z = dtyp((torch.tensor([t[0] for t in tups])).mean(dim=0))
 
     return z
 
 def aggregate_distributions(
-    tups: list[tuple[dtyp, Estimator]],
+    tups: list[tuple[dtyp, Estimator, dtyp]],
     states: PlayStates, min_stdev: float=1e-5
 ) -> torch.distributions.independent.Independent:
     dists = collect_distributions(tups=tups, states=states)
@@ -36,7 +36,7 @@ def aggregate_distributions(
     return d
 
 def aggregate_samples(
-    tups: list[tuple[dtyp, Estimator]], states: PlayStates,
+    tups: list[tuple[dtyp, Estimator, dtyp]], states: PlayStates,
 ) -> torch.Tensor:
     dists = collect_distributions(tups=tups, states=states)
 
@@ -46,7 +46,7 @@ def aggregate_samples(
     return r
 
 def aggregate_logprobs(
-    tups: list[tuple[dtyp, Estimator]],
+    tups: list[tuple[dtyp, Estimator, dtyp]],
     states: PlayStates, actions: PlayActions,
 ) -> torch.Tensor:
     dists = collect_distributions(tups=tups, states=states)
