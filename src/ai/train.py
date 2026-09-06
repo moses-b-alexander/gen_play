@@ -81,7 +81,7 @@ def train_model(
     random: bool,
     training_device: torch.device,
     env_val: PlayEnv | None=None,
-    patience: int=-1, eval_every: int=-1, min_delta: float=0.01,
+    patience_frac: float=0.10, eval_every: int=-1, min_delta: float=0.01,
     use_wandb: bool=False
 ) -> tuple[dtyp, nn.Module]:
     ctrs = subset_containers(env=env, idxs=idxs)
@@ -112,6 +112,7 @@ def train_model(
         )
 
     if min_delta < 1e-6 or min_delta > (1 - 1e-6):  min_delta = 0.01
+    if patience_frac <= 0.0 or patience_frac >= 1.0:  patience_frac = 0.10
 
     steps_per_epoch = len(dataset) // bs
     total_steps_planned = ne * steps_per_epoch
@@ -128,22 +129,18 @@ def train_model(
 
     if val_loader is not None:
         if eval_every <= 1:
-            eval_every = max(2, steps_per_epoch // 10)
+            eval_every = max(2, steps_per_epoch)
             eval_every = max(2, min(eval_every, total_steps_planned // 2))
 
-        if patience <= 1:
-            total_checks = max(1, total_steps_planned // eval_every)
-            patience = max(2, round(total_checks * 0.10))
-        patience_cap = max(1, (total_steps_planned // 2) // eval_every)
-        patience = min(patience, patience_cap)
+        total_checks = max(1, total_steps_planned // eval_every)
+        patience = max(1, round(total_checks * patience_frac))
 
         print(
-            s_str,
-            f"Evaluate every {eval_every} steps, "
-            f"{patience} checks, "
-            f"(~{patience * eval_every} steps), "
-            f"{min_delta * 100:.2f}% relative loss.",
-            s_str
+            s_str.replace("=", "~"),
+            f"Evaluate every {eval_every} steps for {total_checks} checks. "
+            f"Wait ~{(patience * eval_every)} steps for improvement of "
+            f"at least {min_delta * 100:.2f}% relative loss. ",
+            s_str.replace("=", "~")
         )
 
     best_val_loss = float("inf")
@@ -232,23 +229,23 @@ def train_model(
     else:  return (env.log_z, gfn.pf)
 
 def train_bagged_model(
-    bag_ct: int,
+    bag_count: int, validation_ratio: float,
     df_m: pd.DataFrame,
     pf_cls: Type[Estimator], pb_cls: Type[Estimator],
     pf_args: dict, pb_args: dict,
     opt_args: dict,
-    ratio: float=1.000,
     random: bool=False,
     write_model: bool=False,
     cfg_dict: dict={},
     runner_device: torch.device=learning_device,
-    patience: int=-1, eval_every: int=-1, min_delta: float=0.01,
+    patience_frac: float=0.10, eval_every: int=-1, min_delta: float=0.01,
     use_wandb: bool=False,
     wandb_project: str="gen_play"
 ) -> list[tuple[dtyp, Estimator]]:
     rets = []
     uid = uuid4().hex
 
+    ratio = 1 - validation_ratio
     nt = len(sorted(list(set(list(pd.factorize(
         df_m.index.get_level_values(0)
     )[1])))))
@@ -264,7 +261,7 @@ def train_bagged_model(
     if pb_cls is not None:
         pb_args |= {"total_steps": total_steps}
 
-    for i in range(bag_ct):
+    for i in range(bag_count):
         if use_wandb:
             wandb.init(
                 project=wandb_project,
@@ -309,7 +306,8 @@ def train_bagged_model(
             random=random,
             training_device=runner_device,
             env_val=env_val,
-            patience=patience, eval_every=eval_every, min_delta=min_delta,
+            patience_frac=patience_frac, eval_every=eval_every,
+            min_delta=min_delta,
             use_wandb=use_wandb
         )
         rets.append(mt)
