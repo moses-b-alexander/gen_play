@@ -1209,7 +1209,7 @@ def slice_df(
         two_m = (even_q & (sdf["play_time"] <= (2 / 15)))
         mask &= ~two_m
 
-    valid_ids = sdf.loc[mask].index.get_level_values(0)
+    valid_ids = list(sdf.loc[mask].index.get_level_values(0))
     df_f = df.loc[df.index.get_level_values(0).isin(valid_ids)].copy()
 
     return df_f
@@ -1224,6 +1224,14 @@ def postprocess_df(
     add_xrec:  bool=False, skip_reward: bool=False
 ) -> pd.DataFrame:
     df = df.copy()
+
+    empty_traj_ids = list(df.loc[
+        (df.play_is_first != col_types["float"](1.0)) &
+        (df.play_is_last != col_types["float"](1.0)) &
+        (df.play_padded != col_types["float"](1.0)) &
+        (df.play_true_length <= 3),
+    ].index.get_level_values(0))
+    df = df.loc[~df.index.get_level_values(0).isin(empty_traj_ids),].copy()
 
     df = set_zero_play(df)
 

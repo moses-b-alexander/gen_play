@@ -7,7 +7,9 @@ import random
 import torch
 import torch.nn as nn
 
-from ai.constants import action_dim
+from ai.constants import (
+    action_dim, global_dim, play_tensor_indices, player_tensor_indices
+)
 from common.constants import dtyp, seed, team_players
 from common.dirs import output_dir
 from data.constants import shape_players, x_field_max, y_mid, y_bnd
@@ -167,8 +169,12 @@ def permute_batch_first(t: torch.Tensor) -> torch.Tensor:
     return t1.contiguous()
 
 def accumulate_xy(
-    td: torch.Tensor, ts: torch.Tensor, cut: int=0
+    td: torch.Tensor, ts: torch.Tensor, cut: int=0, cut_pad: bool=False
 ) -> tuple[tuple]:
+    sx, sy = play_tensor_indices["snap"][-1], play_tensor_indices["snap_y"][0]
+    plr_x = player_tensor_indices["position"][0] + global_dim
+    plr_y = player_tensor_indices["position"][1] + global_dim
+    ptl = play_tensor_indices["length"][0]
 
     t = torch.zeros((ts.shape[0], shape_players, action_dim))
     te = torch.zeros((ts.shape[0], shape_players, action_dim))
@@ -182,26 +188,33 @@ def accumulate_xy(
         dim=0
     )
 
-    t[..., 0] = (ts[1, :, 23] + tdd_x + ts[1, :, -5])
-    t[..., 1] = (ts[1, :, 24] + tdd_y + ts[1, :, -4])
+    t[..., 0] = (ts[1, :, sx] + tdd_x + ts[1, :, plr_x])
+    t[..., 1] = (ts[1, :, sy] + tdd_y + ts[1, :, plr_y])
+
+    if not isinstance(cut, int):  cut = 0
+    if cut >= t.size(0) or cut <= (-1 * t.size(0)) + 2:  cut = 0
+    if cut >= 0 and cut <= 2:  cut = 0
+    if cut != 0:
+        t[cut:, :, 0] = ts[1, :, sx]
+        t[cut:, :, 1] = ts[1, :, sy]
+
+    if cut == 0 and cut_pad:
+        pad_idx = int(ts[1, 0, ptl].item()) - 1
+        t[pad_idx:, :, 0] = ts[1, :, sx]
+        t[pad_idx:, :, 1] = ts[1, :, sy]
 
     t[..., 0] *= x_field_max
     t[..., 1] *= np.abs(y_bnd)
 
     tt = te.clone() if t.size(1) != shape_players else t.clone()
 
-    if not isinstance(cut, int):  cut = 0
-    if cut >= tt.size(0) or cut <= (-1 * tt.size(0)) + 2:  cut = 0
-    if cut >= 0 and cut <= 2:  cut = 0
-    if cut != 0:  tt[cut:, ...] = dtyp(0.0)
-
     return (
         (tt[:, :team_players, 0], tt[:, team_players:, 0]),
         (tt[:, :team_players, 1], tt[:, team_players:, 1]),
         (
-            torch.round(ts[..., 23] * x_field_max, decimals=0)[1][1].item(),
+            torch.round(ts[..., sx] * x_field_max, decimals=0)[1][1].item(),
             torch.round(
-                (ts[..., 24] * np.abs(y_bnd)) + y_mid, decimals=3
+                (ts[..., sy] * np.abs(y_bnd)) + y_mid, decimals=3
             )[1][1].item()
         )
     )
