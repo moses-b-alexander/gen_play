@@ -5,11 +5,12 @@ import os
 from pathlib import Path
 import sys
 
+DETERMINISTIC = False
+
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
-# os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-# os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+os.environ["GEN_PLAY_DETERMINISTIC"] = "1" if DETERMINISTIC else "0"
+if DETERMINISTIC:  os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 os.chdir(PROJECT_ROOT)

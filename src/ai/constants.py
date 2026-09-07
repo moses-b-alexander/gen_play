@@ -1,9 +1,12 @@
 
+import os
 import torch
 
 
-torch_deterministic = True
+torch_deterministic = os.environ.get("GEN_PLAY_DETERMINISTIC", "0") == "1"
 torch.backends.cudnn.deterministic = torch_deterministic
+torch.backends.cudnn.benchmark = not torch_deterministic
+if torch_deterministic:  torch.use_deterministic_algorithms(True)
 
 global_dim, agent_dim = 28, 20
 state_dim = global_dim + agent_dim

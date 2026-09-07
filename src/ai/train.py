@@ -61,6 +61,9 @@ def training_step(
 
     opt.zero_grad(set_to_none=True)
     loss.backward(retain_graph=False)
+    torch.nn.utils.clip_grad_norm_(gfnet.pf.parameters(), max_norm=1.0)
+    if gfnet.pb is not None:
+        torch.nn.utils.clip_grad_norm_(gfnet.pb.parameters(), max_norm=1.0)
     opt.step()
 
     loss_val = dtyp(loss.item())
