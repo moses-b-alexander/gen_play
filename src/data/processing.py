@@ -407,13 +407,23 @@ def get_data(
 
     track["player_yabs"] = track["player_y"].abs().astype(col_types["float"])
 
+    first_seen = track.sort_values(
+        by=["play_uuid", "player_uuid", "frame_time"]
+    ).groupby(["play_uuid", "player_uuid"], sort=False).first().reset_index()
+    first_seen = first_seen.sort_values(by=(
+        ["play_uuid"] + ["player_offense", "player_x", "player_yabs"]
+    ))
+    first_seen["player_rank"] = \
+        first_seen.groupby("play_uuid", sort=False).cumcount() + 1
+    first_seen["player_rank"] = first_seen["player_rank"].astype(np.uint8)
+
+    track = track.merge(
+        first_seen[["play_uuid", "player_uuid", "player_rank"]],
+        on=["play_uuid", "player_uuid"], how="left"
+    )
     track = track.sort_values(by=(
         frame_colnames[:-1] + ["player_offense", "player_x", "player_yabs"]
     ))
-
-    track["player_rank"] = \
-        track.groupby(frame_colnames[:-1], sort=False).cumcount() + 1
-    track["player_rank"] = track["player_rank"].astype(np.uint8)
     track_pivot = track.pivot(
         index=frame_colnames,
         columns="player_rank",
@@ -468,7 +478,8 @@ def get_data(
     track_new["offense_ct"] = track_new["offense_ct"].astype(int)
 
     invalid_plays_4 = track_new.loc[
-        (track_new.defense_ct == 0) | (track_new.offense_ct == 0),
+        (track_new.defense_ct != team_players) |
+        (track_new.offense_ct != team_players),
     "play_uuid"].unique()
     track_new = track_new.loc[~track_new.play_uuid.isin(invalid_plays_4),]
 
