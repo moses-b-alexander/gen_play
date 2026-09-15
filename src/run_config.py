@@ -26,7 +26,7 @@ DEFAULTS: dict[str, str] = {
     "diff_eq_dim_middle": "32",
     "dt": "1e-2",
     "final_dim": "64",
-    "pow_iters": "1",
+    "pow_iters": "2",
     "learning_rate": "1e-4",
     "weight_decay_rate": "1e-5",
     "batch_size": "8",

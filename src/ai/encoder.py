@@ -90,6 +90,8 @@ class Encoder(nn.Module):
 
         self.register_buffer("max_delta", torch.tensor(max_deltas))
 
+        if backwards:  lags = [[0], [0], [0], [0]]
+
         self.player_keys_d = {}
         lags_k = ["def_tm", "off_tm", "def_op", "off_op"]
         lags_0, lags_1 = {k: [] for k in lags_k}, {k: [] for k in lags_k}
@@ -97,7 +99,7 @@ class Encoder(nn.Module):
         for i in range(len(lags)):
             assert isinstance(lags[i], list)
             for lag in lags[i]:
-                if lag < (self.trajectory_length - 2) - 1 and lag > 0:
+                if lag < (self.trajectory_length - 2) - 1 and lag >= 0:
                     if len(lags) == 1:
                         for ki in lags_k:  lags_0[ki].append(lag)
                     elif len(lags) == 2 and i == 0:

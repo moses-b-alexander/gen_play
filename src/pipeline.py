@@ -231,6 +231,8 @@ def run_pipeline() -> None:
         "min_delta": rcfg["validation_args"]["min_delta"],
     }
 
+    run_id = ""
+
     retsu0, run_id = train_bagged_model(
         bag_count=rcfg["schedule_args"]["bag_count"],
         validation_ratio=rcfg["validation_args"]["validation_ratio"],
