@@ -40,7 +40,9 @@ HP_FIELDS: list[HPField] = [
         kind="str", default=DEFAULTS["lags_def_tm"],
         description=(
             "Comma-separated frame-lag offsets used to build defensive "
-            "players' history features relative to their teammates."
+            "players' history features relative to their teammates. "
+            "Units are frames, not seconds: each unit is 1/fps sec. "
+            "Values must be positive integers, lags <= 0 are dropped."
         ),
     ),
     HPField(
@@ -48,8 +50,10 @@ HP_FIELDS: list[HPField] = [
         group="Encoder",
         kind="str", default=DEFAULTS["lags_off_tm"],
         description=(
-            "Comma-separated frame-lag offsets used to build offensive "
-            "players' history features relative to their teammates."
+            "Comma-separated frame-lag offsets used to build defensive "
+            "players' history features relative to their teammates. "
+            "Units are frames, not seconds: each unit is 1/fps sec. "
+            "Values must be positive integers, lags <= 0 are dropped."
         ),
     ),
     HPField(
@@ -58,7 +62,11 @@ HP_FIELDS: list[HPField] = [
         kind="str", default=DEFAULTS["lags_def_op"],
         description=(
             "Comma-separated frame-lag offsets used to build defensive "
-            "players' history features relative to their opponents."
+            "players' history features relative to their opponents. "
+            "Units are frames, not seconds: each unit is 1/fps sec "
+            "(1/30 sec at the default 30fps), so a lag of 15 is 0.5 sec. "
+            "Values must be positive integers -- lag 0 and negative lags "
+            "are dropped."
         ),
     ),
     HPField(
@@ -67,7 +75,11 @@ HP_FIELDS: list[HPField] = [
         kind="str", default=DEFAULTS["lags_off_op"],
         description=(
             "Comma-separated frame-lag offsets used to build offensive "
-            "players' history features relative to their opponents."
+            "players' history features relative to their opponents. "
+            "Units are frames, not seconds: each unit is 1/fps sec "
+            "(1/30 sec at the default 30fps), so a lag of 15 is 0.5 sec. "
+            "Values must be positive integers -- lag 0 and negative lags "
+            "are dropped."
         ),
     ),
     HPField(

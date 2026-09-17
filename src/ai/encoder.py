@@ -90,8 +90,6 @@ class Encoder(nn.Module):
 
         self.register_buffer("max_delta", torch.tensor(max_deltas))
 
-        if backwards:  lags = [[0], [0], [0], [0]]
-
         self.player_keys_d = {}
         lags_k = ["def_tm", "off_tm", "def_op", "off_op"]
         lags_0, lags_1 = {k: [] for k in lags_k}, {k: [] for k in lags_k}
@@ -99,7 +97,7 @@ class Encoder(nn.Module):
         for i in range(len(lags)):
             assert isinstance(lags[i], list)
             for lag in lags[i]:
-                if lag < (self.trajectory_length - 2) - 1 and lag >= 0:
+                if lag < (self.trajectory_length // 2) and lag > 0:
                     if len(lags) == 1:
                         for ki in lags_k:  lags_0[ki].append(lag)
                     elif len(lags) == 2 and i == 0:
@@ -947,8 +945,16 @@ class Encoder(nn.Module):
             for lag_str in lags:
                 lag = int(lag_str[-4:])
                 x_lag = torch.zeros((lag, B, N//2, agent_dim-2)).to(x.device)
-                x_f_lag = torch.cat(
-                    [x_lag.clone(), xd["other"][:T-lag, ...].clone()], dim=0)
+                if not self.backwards:
+                    x_f_lag = torch.cat(
+                        [x_lag.clone(), xd["other"][:T-lag, ...].clone()],
+                        dim=0
+                    )
+                else:
+                    x_f_lag = torch.cat(
+                        [xd["other"][lag:, ...].clone(), x_lag.clone()],
+                        dim=0
+                    )
                 x_d[lag_str] = torch.cat(
                     [xd["this"].clone(), x_f_lag.clone()], dim=2).detach()
 
