@@ -778,6 +778,8 @@ def get_data(
     ])
     df = df.drop(columns=["play_time_since_start"])
 
+    df = df.loc[df["player_post_snap-01"] == True,].copy()
+
     df = df.copy()
 
     return df
