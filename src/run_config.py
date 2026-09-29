@@ -17,10 +17,10 @@ DEFAULTS: dict[str, str] = {
     "num_heads": "4",
     "dropout": "0.10",
     "expansion": "2",
-    "lags_def_tm": "0,15",
-    "lags_off_tm": "0,15",
-    "lags_def_op": "15,30",
-    "lags_off_op": "15,30",
+    "lags_def_tm": "0.1667,0.3334,0.5",
+    "lags_off_tm": "0.1667,0.3334,0.5",
+    "lags_def_op": "0.3334,0.6667,1.0",
+    "lags_off_op": "0.3334,0.6667,1.0",
     "drift_size": "2",
     "diffusion_size": "2",
     "diff_eq_dim_middle": "32",
@@ -90,6 +90,9 @@ def parse_seasons(raw: str) -> list[tuple[str, int]]:
 def parse_int_list(raw: str) -> list[int]:
     return [int(x.strip()) for x in raw.split(",") if x.strip() != ""]
 
+def parse_float_list(raw: str) -> list[float]:
+    return [float(x.strip()) for x in raw.split(",") if x.strip() != ""]
+
 def parse_catg_idxs(raw: str) -> list[int]:
     return parse_int_list(raw)
 
@@ -108,10 +111,10 @@ def build_run_config(cfg: dict[str, str]) -> dict:
     )
     encoder_kwargs = dict(
         lags=(
-            parse_int_list(cfg["lags_def_tm"]),
-            parse_int_list(cfg["lags_off_tm"]),
-            parse_int_list(cfg["lags_def_op"]),
-            parse_int_list(cfg["lags_off_op"]),
+            parse_float_list(cfg["lags_def_tm"]),
+            parse_float_list(cfg["lags_off_tm"]),
+            parse_float_list(cfg["lags_def_op"]),
+            parse_float_list(cfg["lags_off_op"]),
         ),
         dim_play=int(cfg["dim_play"]), dim_player=int(cfg["dim_player"]),
         num_heads=int(cfg["num_heads"]), dropout=float(cfg["dropout"]),

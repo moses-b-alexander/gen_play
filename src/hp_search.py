@@ -288,7 +288,7 @@ def _build_pf_hps(
         trajectory_length=num_timesteps,
     )
     encoder_hps = get_encoder_hyperparameters(
-        lags=([0, 15], [15, 30]),
+        lags=([0.1667, 0.3334, 0.5], [0.3334, 0.6667, 1.0]),
         dim_play=hps["dim_play"],
         dim_player=hps["dim_player"],
         num_heads=hps["num_heads"],

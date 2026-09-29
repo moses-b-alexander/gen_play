@@ -1,5 +1,6 @@
 
 from common.constants import fps
+from data.constants import max_play_frames
 
 
 max_configs = 10
@@ -52,9 +53,13 @@ paired_bounds = {
     "decoder_max_stdv": ("decoder_min_stdv", "upper"),
 }
 
-list_clamp_bounds = {
-    "lags_def_tm": (0, 1 + (fps * 30)), "lags_off_tm": (0, 1 + (fps * 30)),
-    "lags_def_op": (0, 1 + (fps * 30)), "lags_off_op": (0, 1 + (fps * 30)),
+_max_lag_seconds = (max_play_frames // 2) / fps
+
+float_list_clamp_bounds = {
+    "lags_def_tm": (2 / fps, _max_lag_seconds),
+    "lags_off_tm": (2 / fps, _max_lag_seconds),
+    "lags_def_op": (2 / fps, _max_lag_seconds),
+    "lags_off_op": (2 / fps, _max_lag_seconds),
 }
 
 group_icons = {

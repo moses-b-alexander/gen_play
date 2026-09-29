@@ -4,9 +4,9 @@ from __future__ import annotations
 from nicegui import ui
 from typing import Callable
 
-from run_config import parse_int_list
+from run_config import parse_float_list
 from ui.constants import (
-    clamp_bounds, exclusive_eps, list_clamp_bounds, paired_bounds
+    clamp_bounds, exclusive_eps, float_list_clamp_bounds, paired_bounds
 )
 from ui.hp_schema import (
     HPField,
@@ -33,11 +33,11 @@ def _resolve_pair(key: str, value: float, values: dict[str, str]) -> float:
         return _clamp(key, sibling + exclusive_eps)
     return value
 
-def _clamp_int_list(raw: str, lo: int, hi: int) -> tuple[bool, str]:
+def _clamp_float_list(raw: str, lo: float, hi: float) -> tuple[bool, str]:
     try:
-        vals = parse_int_list(raw)
+        vals = parse_float_list(raw)
     except ValueError:
-        return False, f"expected comma-separated integers, got '{raw}'"
+        return False, f"expected comma-separated numbers, got '{raw}'"
     clamped = [min(max(v, lo), hi) for v in vals]
     return True, ",".join(str(v) for v in clamped)
 
@@ -108,9 +108,9 @@ def render_field(
                 result = f"unrecognized category in '{raw}'"
             else:
                 ok, result = cast_value(f, raw)
-                if ok and key in list_clamp_bounds:
-                    lo, hi = list_clamp_bounds[key]
-                    ok, result = _clamp_int_list(raw, lo, hi)
+                if ok and key in float_list_clamp_bounds:
+                    lo, hi = float_list_clamp_bounds[key]
+                    ok, result = _clamp_float_list(raw, lo, hi)
                     if ok and result != raw:
                         raw = result
                         text_input.set_value(raw)

@@ -3,7 +3,7 @@ from ai.utils import inv_sqrt
 
 
 def get_encoder_hyperparameters(
-    lags: tuple[list[int]],
+    lags: tuple[list[float]],
     dim_play: int, dim_player: int,
     num_heads: int, dropout: float,
     expansion: int

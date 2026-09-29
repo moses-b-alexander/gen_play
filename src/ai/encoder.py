@@ -12,6 +12,7 @@ from ai.normalizer import Normalizer
 from ai.play_encoder import PlayEncoder
 from ai.player_normalizer import PlayerNormalizer
 from ai.timestep_encoder import TimestepEncoder
+from common.constants import fps
 from data.constants import max_deltas, shape_players
 
 
@@ -20,7 +21,7 @@ class Encoder(nn.Module):
         self,
         player_count: int,
         trajectory_length: int,
-        lags: tuple[list[int]],
+        lags: tuple[list[float]],
         num_mlps_play: int,
         dim_projection_play: int, dim_start_play: int, dim_end_play: int,
         dropout_play: float,
@@ -89,6 +90,8 @@ class Encoder(nn.Module):
         self.trajectory_length = trajectory_length
 
         self.register_buffer("max_delta", torch.tensor(max_deltas))
+
+        lags = tuple([round(lag_s * fps) for lag_s in cat] for cat in lags)
 
         self.player_keys_d = {}
         lags_k = ["def_tm", "off_tm", "def_op", "off_op"]
